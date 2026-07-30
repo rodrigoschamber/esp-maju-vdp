@@ -1,0 +1,41 @@
+menu "Estufa VPD - Configuracao"
+
+    config MAJU_I2C_SDA_GPIO
+        int "GPIO do SDA (I2C)"
+        default 21
+        help
+            GPIO21 no conector J3 da ESP32-DevKitC V4. Nao e pino de strapping.
+
+    config MAJU_I2C_SCL_GPIO
+        int "GPIO do SCL (I2C)"
+        default 22
+        help
+            GPIO22 no conector J3 da ESP32-DevKitC V4. Nao e pino de strapping.
+
+    config MAJU_I2C_FREQ_HZ
+        int "Frequencia do barramento I2C (Hz)"
+        default 100000
+        range 10000 1000000
+
+    config MAJU_SHT35_ADDR_0X45
+        bool "SHT35 no endereco 0x45 (pino ADDR em VDD)"
+        default n
+        help
+            Por padrao o pino ADDR fica em GND e o endereco e 0x44.
+            Marque esta opcao apenas se o seu breakout fixa ADDR em VDD.
+
+    config MAJU_SAMPLE_INTERVAL_MS
+        int "Intervalo entre leituras (ms)"
+        default 20000
+        range 1000 600000
+        help
+            20 s e o intervalo do planejamento (limite do ThingSpeak free e 1 envio / 15 s).
+
+    config MAJU_LEAF_OFFSET_DECI_C
+        int "Offset de temperatura da folha (decimos de °C abaixo do ar)"
+        default 20
+        range 0 100
+        help
+            20 = 2,0 °C abaixo da temperatura do ar (valor do MVP).
+
+endmenu
