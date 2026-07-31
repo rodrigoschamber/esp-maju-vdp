@@ -9,6 +9,20 @@ monitor serial.
 > O envio para o ThingSpeak (Wi-Fi + HTTP) entra em uma etapa posterior — a saída
 > já imprime uma linha no formato `field1..field4` para facilitar essa transição.
 
+## Comandos
+
+```bash
+cd ~/esp/esp-maju-vdp
+. $HOME/esp/esp-idf/export.sh                     # ambiente do ESP-IDF (1x por terminal)
+idf.py set-target esp32                           # só na primeira vez / ao trocar de alvo
+idf.py menuconfig                                 # "Estufa VPD - Configuracao"
+idf.py build                                      # compila
+ls /dev/cu.*                                      # descobre a porta serial
+idf.py -p /dev/cu.usbserial-0001 flash monitor    # grava e abre o monitor
+idf.py -p /dev/cu.usbserial-0001 monitor          # só o monitor  (Ctrl+] para sair)
+idf.py fullclean                                  # limpa a build
+```
+
 ## Ligação elétrica
 
 | Pino do SHT35 | Pino do ESP32 |
@@ -49,18 +63,8 @@ idf.py menuconfig   # → "Estufa VPD - Configuracao"
 | Intervalo entre leituras | 20 000 ms |
 | Offset de folha | 20 décimos = 2,0 °C |
 
-## Compilar, gravar e monitorar
-
-```bash
-. $HOME/esp/esp-idf/export.sh
-cd ~/esp/esp-maju-vdp
-idf.py set-target esp32
-idf.py build
-idf.py -p /dev/cu.usbserial-XXXX flash monitor   # Ctrl+] para sair
-```
-
 Na primeira gravação pode ser necessário instalar o driver USB-UART
-(família CP210x/CH34x).
+(família CP210x/CH34x) para que a porta apareça em `ls /dev/cu.*`.
 
 ## Saída esperada
 
@@ -109,6 +113,7 @@ Faixas de referência do VPD da folha: `< 0,4` baixo · `0,4–0,8` propagação
 | `ESP_ERR_INVALID_CRC` | Ruído no barramento — encurte os fios ou baixe a frequência do I²C |
 | Reinícios (brownout) | Fonte fraca — use 5 V ≥ 1 A e cabo de qualidade |
 | Temperatura alta demais | Sensor perto da placa; afaste alguns centímetros |
+| `Tool doesn't match supported version` ou erro em `picolibc.specs` | `sdkconfig`/`build` gerados com outro toolchain — apague os dois (`rm -rf build sdkconfig`) e refaça `set-target` + `build`. O `sdkconfig` é gerado; o versionado é o `sdkconfig.defaults` |
 
 ## Próximos passos
 
