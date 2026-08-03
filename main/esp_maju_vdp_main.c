@@ -48,6 +48,7 @@ static const char *TAG = "estufa";
 
 static i2c_master_bus_handle_t s_bus;
 static sht3x_handle_t s_sensor;
+static uint8_t s_sensor_addr = SHT35_ADDR;
 
 static void i2c_bus_init(void)
 {
@@ -64,25 +65,71 @@ static void i2c_bus_init(void)
              I2C_SDA_GPIO, I2C_SCL_GPIO, I2C_FREQ_HZ);
 }
 
-static void sensor_init(void)
+static esp_err_t sensor_probe_addr(uint8_t *addr)
 {
     esp_err_t err = i2c_master_probe(s_bus, SHT35_ADDR, 200);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Nenhum sensor respondeu em 0x%02X (%s).", SHT35_ADDR, esp_err_to_name(err));
-        ESP_LOGE(TAG, "Confira a fiacao (VDD=3V3, GND, SDA=GPIO%d, SCL=GPIO%d) e o pino ADDR.",
-                 I2C_SDA_GPIO, I2C_SCL_GPIO);
-    } else {
-        ESP_LOGI(TAG, "SHT35 encontrado no endereco 0x%02X", SHT35_ADDR);
+    if (err == ESP_OK) {
+        *addr = SHT35_ADDR;
+        return ESP_OK;
     }
 
-    ESP_ERROR_CHECK(sht3x_create(s_bus, SHT35_ADDR, I2C_FREQ_HZ, &s_sensor));
-    ESP_ERROR_CHECK(sht3x_soft_reset(s_sensor));
-    ESP_ERROR_CHECK(sht3x_heater_off(s_sensor));
+    uint8_t alt_addr = (SHT35_ADDR == SHT3X_ADDR_LOW) ? SHT3X_ADDR_HIGH : SHT3X_ADDR_LOW;
+    esp_err_t alt_err = i2c_master_probe(s_bus, alt_addr, 200);
+    if (alt_err == ESP_OK) {
+        ESP_LOGW(TAG, "Sensor respondeu em 0x%02X (config atual usa 0x%02X).", alt_addr, SHT35_ADDR);
+        *addr = alt_addr;
+        return ESP_OK;
+    }
+
+    ESP_LOGE(TAG, "Nenhum sensor respondeu em 0x%02X nem 0x%02X (%s / %s).",
+             SHT35_ADDR, alt_addr, esp_err_to_name(err), esp_err_to_name(alt_err));
+    ESP_LOGE(TAG, "Confira a fiacao (VDD=3V3, GND, SDA=GPIO%d, SCL=GPIO%d) e o pino ADDR.",
+             I2C_SDA_GPIO, I2C_SCL_GPIO);
+
+    return err;
+}
+
+static esp_err_t sensor_init(void)
+{
+    if (s_sensor != NULL) {
+        return ESP_OK;
+    }
+
+    esp_err_t err = sensor_probe_addr(&s_sensor_addr);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    ESP_LOGI(TAG, "SHT35 encontrado no endereco 0x%02X", s_sensor_addr);
+
+    err = sht3x_create(s_bus, s_sensor_addr, I2C_FREQ_HZ, &s_sensor);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Falha ao criar handle do SHT35: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = sht3x_soft_reset(s_sensor);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Falha no soft reset do SHT35: %s", esp_err_to_name(err));
+        sht3x_delete(s_sensor);
+        s_sensor = NULL;
+        return err;
+    }
+
+    err = sht3x_heater_off(s_sensor);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Falha ao desligar heater do SHT35: %s (seguindo mesmo assim)",
+                 esp_err_to_name(err));
+    }
 
     uint16_t status = 0;
     if (sht3x_read_status(s_sensor, &status) == ESP_OK) {
         ESP_LOGI(TAG, "Status do sensor: 0x%04X", status);
+    } else {
+        ESP_LOGW(TAG, "Nao foi possivel ler o status do sensor na inicializacao.");
     }
+
+    return ESP_OK;
 }
 
 static void print_reading(float t, float rh, const vpd_result_t *v)
@@ -117,15 +164,29 @@ void app_main(void)
              SAMPLE_INTERVAL_MS, LEAF_OFFSET_C);
 
     i2c_bus_init();
-    sensor_init();
+    if (sensor_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Inicializacao do sensor falhou; tentando novamente no loop principal.");
+    }
 
     while (true) {
+        if (s_sensor == NULL) {
+            if (sensor_init() != ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(SAMPLE_INTERVAL_MS));
+                continue;
+            }
+        }
+
         float t = 0.0f;
         float rh = 0.0f;
 
         esp_err_t err = sht3x_measure_single(s_sensor, SHT3X_REP_HIGH, &t, &rh);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Falha na leitura do SHT35: %s", esp_err_to_name(err));
+            if (err == ESP_ERR_INVALID_RESPONSE) {
+                ESP_LOGW(TAG, "Resposta I2C invalida; removendo handle para tentar reinicializar.");
+                sht3x_delete(s_sensor);
+                s_sensor = NULL;
+            }
         } else {
             vpd_result_t v;
             vpd_calculate(t, rh, LEAF_OFFSET_C, &v);
