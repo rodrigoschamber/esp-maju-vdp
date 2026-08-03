@@ -22,6 +22,17 @@
  * ---------------------------------------------------------------------------
  */
 #include <stdio.h>
+
+/* Evita que o IntelliSense no macOS siga headers Mach-O no contexto ESP32. */
+#if defined(__INTELLISENSE__)
+#ifdef __APPLE__
+#undef __APPLE__
+#endif
+#ifdef __MACH__
+#undef __MACH__
+#endif
+#endif
+
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

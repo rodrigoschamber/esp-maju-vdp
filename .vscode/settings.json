@@ -1,4 +1,5 @@
 {
   "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
-  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+  "C_Cpp.default.compilerPath": "/Users/rodrigo.schamber/.espressif/tools/xtensa-esp-elf/esp-16.1.0_20260609/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc",
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-x64"
 }
