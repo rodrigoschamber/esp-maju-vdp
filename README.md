@@ -1,13 +1,10 @@
 # esp-maju-vdp — Sensor de VPD para estufa
 
 Firmware ESP-IDF para a **ESP32-DevKitC V4 (ESP32-WROOM-32UE)** com sensor
-**Sensirion SHT35 (I²C)**. Implementa a parte local do planejamento: leitura de
-temperatura e umidade, cálculo do VPD do ar e do VPD da folha, e exibição no
-monitor serial.
+**Sensirion SHT35 (I²C)**. Faz leitura de temperatura e umidade, cálculo do VPD
+do ar e da folha, exibição no monitor serial e envio para ThingSpeak.
 
-> Escopo desta etapa: **sensor + cálculo + monitor serial**.
-> O envio para o ThingSpeak (Wi-Fi + HTTP) entra em uma etapa posterior — a saída
-> já imprime uma linha no formato `field1..field4` para facilitar essa transição.
+> Escopo atual: **sensor + cálculo + monitor serial + ThingSpeak**.
 
 ## Comandos
 
@@ -63,11 +60,15 @@ Edite o `.env` com os dados da sua rede:
 MAJU_WIFI_SSID="seu_ssid"
 MAJU_WIFI_PASSWORD="sua_senha"
 MAJU_LEAF_OFFSET_C="+2.0"
+MAJU_THINGSPEAK_ENABLE="1"
+MAJU_THINGSPEAK_WRITE_API_KEY="SUA_WRITE_API_KEY"
+MAJU_THINGSPEAK_URL="https://api.thingspeak.com/update"
 ```
 
 - O offset entra no calculo como `T_folha = T_ar - offset`.
 - Exemplo `+2.0`: folha 2 °C mais fria que o ar.
 - Exemplo `-1.0`: folha 1 °C mais quente que o ar.
+- Ative o envio com `MAJU_THINGSPEAK_ENABLE="1"` e informe a Write API Key do canal.
 
 ```
 idf.py menuconfig   # → "Estufa VPD - Configuracao"
@@ -91,6 +92,7 @@ I (312) estufa: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
 I (322) estufa: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
 I (332) estufa: SHT35 encontrado no endereco 0x44
 I (342) estufa: Status do sensor: 0x8010
+I (352) estufa: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
 
 +--------------------------------------------------------------+
 | ESTUFA - LEITURA                                             |
@@ -107,6 +109,7 @@ I (342) estufa: Status do sensor: 0x8010
 +--------------------------------------------------------------+
   Faixa: vegetativo (0,8-1,2) - crescimento saudavel
 I (2352) estufa: field1=24.83 field2=62.14 field3=1.187 field4=0.832
+I (2472) estufa: ThingSpeak atualizado com sucesso (entry_id=123)
 ```
 
 ## Fórmulas
@@ -134,6 +137,5 @@ Faixas de referência do VPD da folha: `< 0,4` baixo · `0,4–0,8` propagação
 
 ## Próximos passos
 
-1. Wi-Fi + `esp_http_client` enviando `field1..field4` ao ThingSpeak a cada 20 s.
-2. Dashboard e faixas coloridas no ThingSpeak.
-3. Alertas fora de faixa.
+1. Dashboard e faixas coloridas no ThingSpeak.
+2. Alertas fora de faixa.

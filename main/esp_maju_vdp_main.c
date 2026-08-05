@@ -22,6 +22,7 @@
  * ---------------------------------------------------------------------------
  */
 #include <stdio.h>
+#include <stdlib.h>
 
 /* Evita que o IntelliSense no macOS siga headers Mach-O no contexto ESP32. */
 #if defined(__INTELLISENSE__)
@@ -39,6 +40,7 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "esp_event.h"
+#include "esp_http_client.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
@@ -58,6 +60,9 @@ static const char *TAG = "estufa";
 #define LEAF_OFFSET_C       MAJU_LEAF_OFFSET_C_ENV
 #define WIFI_SSID           MAJU_WIFI_SSID_ENV
 #define WIFI_PASSWORD       MAJU_WIFI_PASSWORD_ENV
+#define THINGSPEAK_ENABLED  MAJU_THINGSPEAK_ENABLE_ENV
+#define THINGSPEAK_API_KEY  MAJU_THINGSPEAK_WRITE_API_KEY_ENV
+#define THINGSPEAK_URL      MAJU_THINGSPEAK_URL_ENV
 
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
@@ -74,6 +79,67 @@ static sht3x_handle_t s_sensor;
 static uint8_t s_sensor_addr = SHT35_ADDR;
 static EventGroupHandle_t s_wifi_event_group;
 static int s_wifi_retries;
+
+static void thingspeak_send(float t, float rh, const vpd_result_t *v)
+{
+    if (!THINGSPEAK_ENABLED) {
+        return;
+    }
+
+    char payload[192];
+    int len = snprintf(payload,
+                       sizeof(payload),
+                       "api_key=%s&field1=%.2f&field2=%.2f&field3=%.3f&field4=%.3f",
+                       THINGSPEAK_API_KEY,
+                       t,
+                       rh,
+                       v->vpd_ar,
+                       v->vpd_folha);
+    if (len <= 0 || len >= (int)sizeof(payload)) {
+        ESP_LOGE(TAG, "Payload ThingSpeak excedeu o limite do buffer.");
+        return;
+    }
+
+    esp_http_client_config_t cfg = {
+        .url = THINGSPEAK_URL,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (client == NULL) {
+        ESP_LOGE(TAG, "Falha ao criar cliente HTTP para ThingSpeak.");
+        return;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "application/x-www-form-urlencoded");
+    esp_http_client_set_post_field(client, payload, len);
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+
+    char response[32] = {0};
+    int read_len = esp_http_client_read_response(client, response, sizeof(response) - 1);
+    if (read_len > 0) {
+        response[read_len] = '\0';
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Falha ao enviar ThingSpeak: %s", esp_err_to_name(err));
+    } else if (status != 200) {
+        ESP_LOGE(TAG, "ThingSpeak retornou HTTP %d (resp=%s)", status, read_len > 0 ? response : "sem corpo");
+    } else {
+        long entry_id = strtol(response, NULL, 10);
+        if (entry_id > 0) {
+            ESP_LOGI(TAG, "ThingSpeak atualizado com sucesso (entry_id=%ld)", entry_id);
+        } else {
+            ESP_LOGW(TAG, "ThingSpeak respondeu sem confirmar entry_id (resp=%s)",
+                     read_len > 0 ? response : "vazio");
+        }
+    }
+
+    esp_http_client_cleanup(client);
+}
 
 static void wifi_event_handler(void *arg,
                                esp_event_base_t event_base,
@@ -279,6 +345,12 @@ void app_main(void)
     ESP_LOGI(TAG, "Intervalo de leitura: %d ms | offset de folha: %+.1f C",
              SAMPLE_INTERVAL_MS, LEAF_OFFSET_C);
 
+    if (THINGSPEAK_ENABLED) {
+        ESP_LOGI(TAG, "ThingSpeak ativo: enviando para %s", THINGSPEAK_URL);
+    } else {
+        ESP_LOGI(TAG, "ThingSpeak desativado (MAJU_THINGSPEAK_ENABLE=0 no .env).");
+    }
+
     wifi_init_sta();
 
     i2c_bus_init();
@@ -309,6 +381,7 @@ void app_main(void)
             vpd_result_t v;
             vpd_calculate(t, rh, LEAF_OFFSET_C, &v);
             print_reading(t, rh, &v);
+            thingspeak_send(t, rh, &v);
         }
 
         vTaskDelay(pdMS_TO_TICKS(SAMPLE_INTERVAL_MS));
