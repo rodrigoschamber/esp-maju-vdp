@@ -25,13 +25,13 @@ idf.py fullclean                                  # limpa a build
 
 ## Ligação elétrica
 
-| Pino do SHT35 | Pino do ESP32 |
-| --- | --- |
-| VDD (VCC) | 3V3 |
-| GND | GND |
-| SDA | GPIO21 |
-| SCL | GPIO22 |
-| ADDR | GND (endereço 0x44) |
+| Pino do SHT35 | Pino do ESP32       |
+| ------------- | ------------------- |
+| VDD (VCC)     | 3V3                 |
+| GND           | GND                 |
+| SDA           | GPIO21              |
+| SCL           | GPIO22              |
+| ADDR          | GND (endereço 0x44) |
 
 - GPIO21/GPIO22 estão no conector J3 e **não** são pinos de strapping.
 - O pino `ADDR` não pode ficar flutuando. Em GND → 0x44; em VDD → 0x45
@@ -42,26 +42,39 @@ idf.py fullclean                                  # limpa a build
 
 ## Estrutura
 
-| Arquivo | Conteúdo |
-| --- | --- |
-| [main/esp_maju_vdp_main.c](main/esp_maju_vdp_main.c) | Inicialização do I²C, laço de leitura e impressão |
+| Arquivo                                                     | Conteúdo                                                  |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| [main/esp_maju_vdp_main.c](main/esp_maju_vdp_main.c)        | Inicialização do I²C, laço de leitura e impressão         |
 | [main/sht3x.c](main/sht3x.c) / [main/sht3x.h](main/sht3x.h) | Driver do SHT3x (single-shot, alta repetibilidade, CRC-8) |
-| [main/vpd.c](main/vpd.c) / [main/vpd.h](main/vpd.h) | Fórmulas de VPD (Tetens) e faixas de referência |
-| [main/Kconfig.projbuild](main/Kconfig.projbuild) | Pinos, endereço, intervalo e offset de folha |
+| [main/vpd.c](main/vpd.c) / [main/vpd.h](main/vpd.h)         | Fórmulas de VPD (Tetens) e faixas de referência           |
+| [main/Kconfig.projbuild](main/Kconfig.projbuild)            | Pinos, endereço, intervalo e offset de folha              |
 
 ## Configuração
+
+Antes do build, crie o arquivo de credenciais locais (nao versionado):
+
+```bash
+cp .env.example .env
+```
+
+Edite o `.env` com os dados da sua rede:
+
+```dotenv
+MAJU_WIFI_SSID="seu_ssid"
+MAJU_WIFI_PASSWORD="sua_senha"
+```
 
 ```
 idf.py menuconfig   # → "Estufa VPD - Configuracao"
 ```
 
-| Opção | Padrão |
-| --- | --- |
-| GPIO do SDA / SCL | 21 / 22 |
-| Frequência do I²C | 100 kHz |
-| Endereço do SHT35 | 0x44 (ADDR em GND) |
-| Intervalo entre leituras | 20 000 ms |
-| Offset de folha | 20 décimos = 2,0 °C |
+| Opção                    | Padrão              |
+| ------------------------ | ------------------- |
+| GPIO do SDA / SCL        | 21 / 22             |
+| Frequência do I²C        | 100 kHz             |
+| Endereço do SHT35        | 0x44 (ADDR em GND)  |
+| Intervalo entre leituras | 20 000 ms           |
+| Offset de folha          | 20 décimos = 2,0 °C |
 
 Na primeira gravação pode ser necessário instalar o driver USB-UART
 (família CP210x/CH34x) para que a porta apareça em `ls /dev/cu.*`.
@@ -107,12 +120,12 @@ Faixas de referência do VPD da folha: `< 0,4` baixo · `0,4–0,8` propagação
 
 ## Diagnóstico
 
-| Sintoma | Causa provável |
-| --- | --- |
-| `Nenhum sensor respondeu em 0x44` | Fiação, alimentação 3V3 ou pino ADDR flutuando |
-| `ESP_ERR_INVALID_CRC` | Ruído no barramento — encurte os fios ou baixe a frequência do I²C |
-| Reinícios (brownout) | Fonte fraca — use 5 V ≥ 1 A e cabo de qualidade |
-| Temperatura alta demais | Sensor perto da placa; afaste alguns centímetros |
+| Sintoma                                                            | Causa provável                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Nenhum sensor respondeu em 0x44`                                  | Fiação, alimentação 3V3 ou pino ADDR flutuando                                                                                                                                             |
+| `ESP_ERR_INVALID_CRC`                                              | Ruído no barramento — encurte os fios ou baixe a frequência do I²C                                                                                                                         |
+| Reinícios (brownout)                                               | Fonte fraca — use 5 V ≥ 1 A e cabo de qualidade                                                                                                                                            |
+| Temperatura alta demais                                            | Sensor perto da placa; afaste alguns centímetros                                                                                                                                           |
 | `Tool doesn't match supported version` ou erro em `picolibc.specs` | `sdkconfig`/`build` gerados com outro toolchain — apague os dois (`rm -rf build sdkconfig`) e refaça `set-target` + `build`. O `sdkconfig` é gerado; o versionado é o `sdkconfig.defaults` |
 
 ## Próximos passos

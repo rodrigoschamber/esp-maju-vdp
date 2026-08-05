@@ -36,11 +36,17 @@
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "esp_log.h"
+#include "esp_event.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "nvs_flash.h"
 #include "driver/i2c_master.h"
 
 #include "sht3x.h"
 #include "vpd.h"
+#include "wifi_env.h"
 
 static const char *TAG = "estufa";
 
@@ -50,6 +56,12 @@ static const char *TAG = "estufa";
 #define I2C_FREQ_HZ         CONFIG_MAJU_I2C_FREQ_HZ
 #define SAMPLE_INTERVAL_MS  CONFIG_MAJU_SAMPLE_INTERVAL_MS
 #define LEAF_OFFSET_C       (CONFIG_MAJU_LEAF_OFFSET_DECI_C / 10.0f)
+#define WIFI_SSID           MAJU_WIFI_SSID_ENV
+#define WIFI_PASSWORD       MAJU_WIFI_PASSWORD_ENV
+
+#define WIFI_CONNECTED_BIT  BIT0
+#define WIFI_FAIL_BIT       BIT1
+#define WIFI_MAX_RETRIES    10
 
 #if CONFIG_MAJU_SHT35_ADDR_0X45
 #define SHT35_ADDR          SHT3X_ADDR_HIGH
@@ -60,6 +72,99 @@ static const char *TAG = "estufa";
 static i2c_master_bus_handle_t s_bus;
 static sht3x_handle_t s_sensor;
 static uint8_t s_sensor_addr = SHT35_ADDR;
+static EventGroupHandle_t s_wifi_event_group;
+static int s_wifi_retries;
+
+static void wifi_event_handler(void *arg,
+                               esp_event_base_t event_base,
+                               int32_t event_id,
+                               void *event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+        return;
+    }
+
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_wifi_retries < WIFI_MAX_RETRIES) {
+            s_wifi_retries++;
+            ESP_LOGW(TAG, "Wi-Fi desconectou; tentando reconectar (%d/%d)",
+                     s_wifi_retries, WIFI_MAX_RETRIES);
+            esp_wifi_connect();
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        }
+        return;
+    }
+
+    if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        ESP_LOGI(TAG, "Wi-Fi conectado. IP=" IPSTR, IP2STR(&event->ip_info.ip));
+        s_wifi_retries = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
+static void wifi_init_sta(void)
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+
+    s_wifi_event_group = xEventGroupCreate();
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    ESP_ERROR_CHECK(esp_event_handler_register(
+        WIFI_EVENT,
+        ESP_EVENT_ANY_ID,
+        &wifi_event_handler,
+        NULL));
+
+    ESP_ERROR_CHECK(esp_event_handler_register(
+        IP_EVENT,
+        IP_EVENT_STA_GOT_IP,
+        &wifi_event_handler,
+        NULL));
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+        },
+    };
+
+    snprintf((char *)wifi_config.sta.ssid, sizeof(wifi_config.sta.ssid), "%s", WIFI_SSID);
+    snprintf((char *)wifi_config.sta.password, sizeof(wifi_config.sta.password), "%s", WIFI_PASSWORD);
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "Conectando no Wi-Fi SSID: %s", WIFI_SSID);
+
+    EventBits_t bits = xEventGroupWaitBits(
+        s_wifi_event_group,
+        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+        pdFALSE,
+        pdFALSE,
+        pdMS_TO_TICKS(15000));
+
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "Wi-Fi pronto para uso.");
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGW(TAG, "Nao foi possivel conectar no Wi-Fi apos %d tentativas.", WIFI_MAX_RETRIES);
+    } else {
+        ESP_LOGW(TAG, "Timeout na conexao Wi-Fi; seguindo e deixando reconexao em background.");
+    }
+}
 
 static void i2c_bus_init(void)
 {
@@ -173,6 +278,8 @@ void app_main(void)
     ESP_LOGI(TAG, "esp-maju-vdp - sensor de VPD para estufa");
     ESP_LOGI(TAG, "Intervalo de leitura: %d ms | offset de folha: %.1f C",
              SAMPLE_INTERVAL_MS, LEAF_OFFSET_C);
+
+    wifi_init_sta();
 
     i2c_bus_init();
     if (sensor_init() != ESP_OK) {

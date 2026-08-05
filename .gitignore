@@ -3,3 +3,6 @@ build
 # Gerados pelo idf.py — o que se versiona e o sdkconfig.defaults
 sdkconfig
 sdkconfig.old
+
+# Credenciais locais (nao versionar)
+.env
