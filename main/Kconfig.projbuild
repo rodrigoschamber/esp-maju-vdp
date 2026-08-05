@@ -31,11 +31,4 @@ menu "Estufa VPD - Configuracao"
         help
             20 s e o intervalo do planejamento (limite do ThingSpeak free e 1 envio / 15 s).
 
-    config MAJU_LEAF_OFFSET_DECI_C
-        int "Offset de temperatura da folha (decimos de °C abaixo do ar)"
-        default 20
-        range 0 100
-        help
-            20 = 2,0 °C abaixo da temperatura do ar (valor do MVP).
-
 endmenu

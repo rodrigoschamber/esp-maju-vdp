@@ -47,7 +47,7 @@ idf.py fullclean                                  # limpa a build
 | [main/esp_maju_vdp_main.c](main/esp_maju_vdp_main.c)        | Inicialização do I²C, laço de leitura e impressão         |
 | [main/sht3x.c](main/sht3x.c) / [main/sht3x.h](main/sht3x.h) | Driver do SHT3x (single-shot, alta repetibilidade, CRC-8) |
 | [main/vpd.c](main/vpd.c) / [main/vpd.h](main/vpd.h)         | Fórmulas de VPD (Tetens) e faixas de referência           |
-| [main/Kconfig.projbuild](main/Kconfig.projbuild)            | Pinos, endereço, intervalo e offset de folha              |
+| [main/Kconfig.projbuild](main/Kconfig.projbuild)            | Pinos, endereço e intervalo                               |
 
 ## Configuração
 
@@ -62,19 +62,23 @@ Edite o `.env` com os dados da sua rede:
 ```dotenv
 MAJU_WIFI_SSID="seu_ssid"
 MAJU_WIFI_PASSWORD="sua_senha"
+MAJU_LEAF_OFFSET_C="+2.0"
 ```
+
+- O offset entra no calculo como `T_folha = T_ar - offset`.
+- Exemplo `+2.0`: folha 2 °C mais fria que o ar.
+- Exemplo `-1.0`: folha 1 °C mais quente que o ar.
 
 ```
 idf.py menuconfig   # → "Estufa VPD - Configuracao"
 ```
 
-| Opção                    | Padrão              |
-| ------------------------ | ------------------- |
-| GPIO do SDA / SCL        | 21 / 22             |
-| Frequência do I²C        | 100 kHz             |
-| Endereço do SHT35        | 0x44 (ADDR em GND)  |
-| Intervalo entre leituras | 20 000 ms           |
-| Offset de folha          | 20 décimos = 2,0 °C |
+| Opção                    | Padrão             |
+| ------------------------ | ------------------ |
+| GPIO do SDA / SCL        | 21 / 22            |
+| Frequência do I²C        | 100 kHz            |
+| Endereço do SHT35        | 0x44 (ADDR em GND) |
+| Intervalo entre leituras | 20 000 ms          |
 
 Na primeira gravação pode ser necessário instalar o driver USB-UART
 (família CP210x/CH34x) para que a porta apareça em `ls /dev/cu.*`.
@@ -83,7 +87,7 @@ Na primeira gravação pode ser necessário instalar o driver USB-UART
 
 ```
 I (312) estufa: esp-maju-vdp - sensor de VPD para estufa
-I (312) estufa: Intervalo de leitura: 20000 ms | offset de folha: 2.0 C
+I (312) estufa: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
 I (322) estufa: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
 I (332) estufa: SHT35 encontrado no endereco 0x44
 I (342) estufa: Status do sensor: 0x8010
@@ -98,7 +102,7 @@ I (342) estufa: Status do sensor: 0x8010
 | AVP (vapor atual) ..........  1.949 kPa                      |
 | VPD do ar ..................  1.187 kPa                      |
 |                                                              |
-| Temp. da folha (-2.0 C) ....  22.83  C                       |
+| Temp. da folha (+2.0 C) ....  22.83  C                       |
 | VPD da folha ...............  0.832 kPa                      |
 +--------------------------------------------------------------+
   Faixa: vegetativo (0,8-1,2) - crescimento saudavel

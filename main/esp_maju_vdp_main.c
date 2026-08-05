@@ -13,7 +13,7 @@
  * ---------------------------------------------------------------------------
  *   . $HOME/esp/esp-idf/export.sh        # carrega o ambiente do ESP-IDF (1x por terminal)
  *   idf.py set-target esp32              # so na primeira vez / ao trocar de alvo
- *   idf.py menuconfig                    # "Estufa VPD - Configuracao": pinos, intervalo, offset
+ *   idf.py menuconfig                    # "Estufa VPD - Configuracao": pinos e intervalo
  *   idf.py build                         # compila
  *   ls /dev/cu.*                         # descobre a porta (ex.: /dev/cu.usbserial-0001)
  *   idf.py -p /dev/cu.usbserial-0001 flash monitor   # grava e abre o monitor
@@ -55,7 +55,7 @@ static const char *TAG = "estufa";
 #define I2C_SCL_GPIO        CONFIG_MAJU_I2C_SCL_GPIO
 #define I2C_FREQ_HZ         CONFIG_MAJU_I2C_FREQ_HZ
 #define SAMPLE_INTERVAL_MS  CONFIG_MAJU_SAMPLE_INTERVAL_MS
-#define LEAF_OFFSET_C       (CONFIG_MAJU_LEAF_OFFSET_DECI_C / 10.0f)
+#define LEAF_OFFSET_C       MAJU_LEAF_OFFSET_C_ENV
 #define WIFI_SSID           MAJU_WIFI_SSID_ENV
 #define WIFI_PASSWORD       MAJU_WIFI_PASSWORD_ENV
 
@@ -263,7 +263,7 @@ static void print_reading(float t, float rh, const vpd_result_t *v)
     printf("| AVP (vapor atual) .......... %6.3f kPa                      |\n", v->avp);
     printf("| VPD do ar .................. %6.3f kPa                      |\n", v->vpd_ar);
     printf("|                                                              |\n");
-    printf("| Temp. da folha (-%.1f C) .... %6.2f  C                       |\n", LEAF_OFFSET_C, v->t_folha_c);
+    printf("| Temp. da folha (%+.1f C) .... %6.2f  C                       |\n", LEAF_OFFSET_C, v->t_folha_c);
     printf("| VPD da folha ............... %6.3f kPa                      |\n", v->vpd_folha);
     printf("+--------------------------------------------------------------+\n");
     printf("  Faixa: %s\n", vpd_faixa_str(faixa));
@@ -276,7 +276,7 @@ static void print_reading(float t, float rh, const vpd_result_t *v)
 void app_main(void)
 {
     ESP_LOGI(TAG, "esp-maju-vdp - sensor de VPD para estufa");
-    ESP_LOGI(TAG, "Intervalo de leitura: %d ms | offset de folha: %.1f C",
+    ESP_LOGI(TAG, "Intervalo de leitura: %d ms | offset de folha: %+.1f C",
              SAMPLE_INTERVAL_MS, LEAF_OFFSET_C);
 
     wifi_init_sta();
