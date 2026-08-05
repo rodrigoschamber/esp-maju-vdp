@@ -93,4 +93,4 @@ idf_component_register(SRCS "esp_maju_vdp_main.c"
                             "sht3x.c"
                             "vpd.c"
                             INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
-                       PRIV_REQUIRES esp_driver_i2c esp_wifi esp_event esp_netif nvs_flash esp_http_client)
+                       PRIV_REQUIRES esp_driver_i2c esp_wifi esp_event esp_netif nvs_flash esp_http_client mbedtls)

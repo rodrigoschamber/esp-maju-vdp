@@ -40,6 +40,7 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "esp_event.h"
+#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -104,6 +105,7 @@ static void thingspeak_send(float t, float rh, const vpd_result_t *v)
         .url = THINGSPEAK_URL,
         .method = HTTP_METHOD_POST,
         .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
