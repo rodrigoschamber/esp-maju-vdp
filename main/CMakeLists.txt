@@ -90,8 +90,13 @@ set(MAJU_LEAF_OFFSET_C_LITERAL "${MAJU_LEAF_OFFSET_C_ENV}f")
 configure_file(${CMAKE_CURRENT_LIST_DIR}/wifi_env.h.in ${CMAKE_CURRENT_BINARY_DIR}/wifi_env.h @ONLY)
 
 idf_component_register(SRCS "esp_maju_vdp_main.c"
-                            "sht3x.c"
-                            "vpd.c"
-                            "telemetry_thingspeak.c"
-                            INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}"
+                            "hal/sht3x.c"
+                            "domain/vpd.c"
+                            "telemetry/thingspeak/telemetry_thingspeak.c"
+                       INCLUDE_DIRS "."
+                                    "hal"
+                                    "domain"
+                                    "telemetry"
+                                    "telemetry/thingspeak"
+                                    "${CMAKE_CURRENT_BINARY_DIR}"
                        PRIV_REQUIRES esp_driver_i2c esp_wifi esp_event esp_netif nvs_flash esp_http_client mbedtls)
