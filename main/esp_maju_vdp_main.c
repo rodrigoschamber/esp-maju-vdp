@@ -1,26 +1,3 @@
-/*
- * esp-maju-vdp — Sensor de VPD para estufa
- *
- * Etapa atual (MVP fase 3, parte local): le temperatura e umidade do SHT35 via
- * I2C, calcula o VPD do ar e o VPD da folha e exibe tudo no monitor serial.
- * O envio ao ThingSpeak entra em uma etapa posterior.
- *
- * Placa: Espressif ESP32-DevKitC V4 (modulo ESP32-WROOM-32UE)
- * Sensor: Sensirion SHT35 em I2C — SDA=GPIO21, SCL=GPIO22, ADDR=GND (0x44)
- *
- * ---------------------------------------------------------------------------
- * COMANDOS (rodar a partir de ~/esp/esp-maju-vdp)
- * ---------------------------------------------------------------------------
- *   . $HOME/esp/esp-idf/export.sh        # carrega o ambiente do ESP-IDF (1x por terminal)
- *   idf.py set-target esp32              # so na primeira vez / ao trocar de alvo
- *   idf.py menuconfig                    # "Estufa VPD - Configuracao": pinos e intervalo
- *   idf.py build                         # compila
- *   ls /dev/cu.*                         # descobre a porta (ex.: /dev/cu.usbserial-0001)
- *   idf.py -p /dev/cu.usbserial-0001 flash monitor   # grava e abre o monitor
- *   idf.py -p /dev/cu.usbserial-0001 monitor         # so o monitor (Ctrl+] para sair)
- *   idf.py fullclean                     # limpa a build quando algo ficar inconsistente
- * ---------------------------------------------------------------------------
- */
 #include <stdio.h>
 #include <stdlib.h>
 
