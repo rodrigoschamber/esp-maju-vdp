@@ -6,19 +6,7 @@ do ar e da folha, exibição no monitor serial e envio para ThingSpeak.
 
 > Escopo atual: **sensor + cálculo + monitor serial + ThingSpeak**.
 
-## Comandos
-
-```bash
-cd ~/esp/esp-maju-vdp
-. $HOME/esp/esp-idf/export.sh                     # ambiente do ESP-IDF (1x por terminal)
-idf.py set-target esp32                           # só na primeira vez / ao trocar de alvo
-idf.py menuconfig                                 # "Estufa VPD - Configuracao"
-idf.py build                                      # compila
-ls /dev/cu.*                                      # descobre a porta serial
-idf.py -p /dev/cu.usbserial-0001 flash monitor    # grava e abre o monitor
-idf.py -p /dev/cu.usbserial-0001 monitor          # só o monitor  (Ctrl+] para sair)
-idf.py fullclean                                  # limpa a build
-```
+---
 
 ## Ligação elétrica
 
@@ -37,24 +25,104 @@ idf.py fullclean                                  # limpa a build
   energizar a placa (mesmo que o Wi-Fi ainda não seja usado nesta etapa).
 - Alimente pela micro-USB com fonte de 5 V ≥ 1 A.
 
-## Estrutura
+---
 
-| Arquivo                                                     | Conteúdo                                                  |
-| ----------------------------------------------------------- | --------------------------------------------------------- |
-| [main/esp_maju_vdp_main.c](main/esp_maju_vdp_main.c)        | Inicialização do I²C, laço de leitura e impressão         |
-| [main/sht3x.c](main/sht3x.c) / [main/sht3x.h](main/sht3x.h) | Driver do SHT3x (single-shot, alta repetibilidade, CRC-8) |
-| [main/vpd.c](main/vpd.c) / [main/vpd.h](main/vpd.h)         | Fórmulas de VPD (Tetens) e faixas de referência           |
-| [main/Kconfig.projbuild](main/Kconfig.projbuild)            | Pinos, endereço e intervalo                               |
+## Estrutura do código
+
+```
+esp-maju-vdp/
+├── main/
+│   ├── esp_maju_vdp_main.c          # app_main: orquestração geral
+│   ├── hal/
+│   │   ├── sht3x.c / sht3x.h        # driver I²C do SHT3x (CRC-8, single-shot)
+│   ├── domain/
+│   │   ├── vpd.c / vpd.h            # fórmulas de VPD e faixas de referência
+│   ├── telemetry/
+│   │   ├── telemetry.h              # interface genérica telemetry_backend_t
+│   │   └── thingspeak/
+│   │       ├── telemetry_thingspeak.c / .h  # backend ThingSpeak (HTTP POST)
+│   ├── Kconfig.projbuild            # configuração via menuconfig
+│   ├── wifi_env.h.in                # template gerado em build time
+│   └── CMakeLists.txt
+├── .env                             # credenciais locais (não versionado)
+├── .env.example
+├── sdkconfig.defaults
+└── CMakeLists.txt
+```
+
+### Separação de responsabilidades
+
+| Layer       | Pasta                 | Depende de                 |
+| ----------- | --------------------- | -------------------------- |
+| HAL         | `hal/`                | `esp_driver_i2c`           |
+| Domain      | `domain/`             | nada (C puro)              |
+| Telemetry   | `telemetry/`          | `esp_http_client`, `vpd.h` |
+| Application | `esp_maju_vdp_main.c` | todos os layers acima      |
+
+---
+
+## Design patterns
+
+### Strategy — backend de telemetria intercambiável
+
+A interface `telemetry_backend_t` (em `telemetry/telemetry.h`) desacopla o
+protocolo de envio da lógica da aplicação:
+
+```c
+typedef struct {
+    esp_err_t (*init)(void);
+    void      (*send)(float t, float rh, const vpd_result_t *v);
+    void      (*deinit)(void);
+} telemetry_backend_t;
+```
+
+`app_main` usa apenas um ponteiro para essa interface:
+
+```c
+static const telemetry_backend_t *s_telemetry = &thingspeak_backend;
+```
+
+Para trocar de plataforma, basta apontar para outro backend — sem tocar no
+restante da aplicação.
+
+### HAL — driver de sensor isolado
+
+`hal/sht3x` encapsula todo o protocolo I²C do SHT35. O `app_main` nunca
+manipula endereços nem comandos de barramento diretamente.
+
+---
+
+## Expansão
+
+### Adicionar um novo backend de telemetria (ex.: MQTT)
+
+1. Criar `main/telemetry/mqtt/telemetry_mqtt.c` e `telemetry_mqtt.h`.
+2. Implementar as três funções (`init`, `send`, `deinit`) e exportar `mqtt_backend`.
+3. Adicionar o `.c` ao `SRCS` e o diretório ao `INCLUDE_DIRS` em `CMakeLists.txt`.
+4. Em `esp_maju_vdp_main.c`, alterar apenas uma linha:
+
+```c
+static const telemetry_backend_t *s_telemetry = &mqtt_backend;
+```
+
+### Migrar para componentes ESP-IDF (`components/`)
+
+Quando `hal/`, `domain/` ou `telemetry/` precisarem ser reutilizados em
+outros projetos, mova cada pasta para `components/<nome>/` com seu próprio
+`CMakeLists.txt` e declare a dependência em `main/CMakeLists.txt` via
+`PRIV_REQUIRES`.
+
+---
 
 ## Configuração
 
-Antes do build, crie o arquivo de credenciais locais (nao versionado):
+Antes do build, crie o arquivo de credenciais locais (não versionado):
 
 ```bash
 cp .env.example .env
 ```
 
-Edite o `.env` com os dados da sua rede:
+Edite o `.env`:
 
 ```dotenv
 MAJU_WIFI_SSID="seu_ssid"
@@ -65,12 +133,14 @@ MAJU_THINGSPEAK_WRITE_API_KEY="SUA_WRITE_API_KEY"
 MAJU_THINGSPEAK_URL="https://api.thingspeak.com/update"
 ```
 
-- O offset entra no calculo como `T_folha = T_ar - offset`.
-- Exemplo `+2.0`: folha 2 °C mais fria que o ar.
-- Exemplo `-1.0`: folha 1 °C mais quente que o ar.
-- Ative o envio com `MAJU_THINGSPEAK_ENABLE="1"` e informe a Write API Key do canal.
+- `MAJU_LEAF_OFFSET_C`: diferença de temperatura entre ar e folha em °C.
+  - `+2.0` → folha 2 °C mais fria que o ar (típico em ambientes controlados).
+  - `-1.0` → folha mais quente (sob luz intensa sem transpiração suficiente).
+- `MAJU_THINGSPEAK_ENABLE=1` ativa o envio; `0` desativa sem recompilar.
 
-```
+Opções adicionais via `menuconfig`:
+
+```bash
 idf.py menuconfig   # → "Estufa VPD - Configuracao"
 ```
 
@@ -83,6 +153,69 @@ idf.py menuconfig   # → "Estufa VPD - Configuracao"
 
 Na primeira gravação pode ser necessário instalar o driver USB-UART
 (família CP210x/CH34x) para que a porta apareça em `ls /dev/cu.*`.
+
+---
+
+## Comandos
+
+```bash
+cd ~/esp/esp-maju-vdp
+. $HOME/esp/esp-idf/export.sh                     # ambiente do ESP-IDF (1x por terminal)
+idf.py set-target esp32                           # só na primeira vez / ao trocar de alvo
+idf.py menuconfig                                 # "Estufa VPD - Configuracao"
+idf.py build                                      # compila
+ls /dev/cu.*                                      # descobre a porta serial
+idf.py -p /dev/cu.usbserial-0001 flash monitor    # grava e abre o monitor
+idf.py -p /dev/cu.usbserial-0001 monitor          # só o monitor  (Ctrl+] para sair)
+idf.py fullclean                                  # limpa a build quando algo ficar inconsistente
+```
+
+---
+
+## Fórmulas e cálculos
+
+### Pressão de vapor de saturação (SVP) — Tetens
+
+$$
+\text{SVP}(T) = 0{,}6108 \times e^{\dfrac{17{,}27 \times T}{T + 237{,}3}} \quad [\text{kPa}]
+$$
+
+### Pressão de vapor atual (AVP)
+
+$$
+\text{AVP} = \text{SVP}_{ar} \times \frac{UR}{100}
+$$
+
+### VPD do ar
+
+$$
+\text{VPD}_{ar} = \text{SVP}_{ar} - \text{AVP}
+$$
+
+### Temperatura da folha e VPD foliar
+
+$$
+T_{folha} = T_{ar} - \text{offset} \qquad \text{(offset positivo = folha mais fria)}
+$$
+
+$$
+\text{VPD}_{folha} = \text{SVP}(T_{folha}) - \text{AVP}
+$$
+
+O VPD foliar é o indicador primário de manejo: representa a força de sucção
+de água que a folha exerce — muito baixo → fungos; muito alto → estresse hídrico.
+
+### Faixas de referência (VPD da folha)
+
+| Faixa (kPa) | Fase             | Indicação                            |
+| ----------- | ---------------- | ------------------------------------ |
+| < 0,4       | Baixo            | Risco de doenças fúngicas            |
+| 0,4 – 0,8   | Propagação/clone | Ideal para enraizamento              |
+| 0,8 – 1,2   | Vegetativo       | Crescimento saudável                 |
+| 1,2 – 1,6   | Floração         | Transpiração ativa, produção elevada |
+| > 1,6       | Alto             | Estresse hídrico, fechar estômatos   |
+
+---
 
 ## Saída esperada
 
@@ -112,18 +245,25 @@ I (2352) estufa: field1=24.83 field2=62.14 field3=1.187 field4=0.832
 I (2472) estufa: ThingSpeak atualizado com sucesso (entry_id=123)
 ```
 
-## Fórmulas
+---
 
-```
-SVP      = 0.6108 * exp((17.27 * T) / (T + 237.3))     # Tetens, kPa
-AVP      = SVP_ar * (UR / 100)
-VPD_ar   = SVP_ar - AVP
-T_folha  = T_ar - offset (2 °C no MVP)
-VPD_folha= SVP(T_folha) - AVP
-```
+## Dashboard ThingSpeak
 
-Faixas de referência do VPD da folha: `< 0,4` baixo · `0,4–0,8` propagação ·
-`0,8–1,2` vegetativo · `1,2–1,6` floração · `> 1,6` alto.
+Canal público: <https://thingspeak.mathworks.com/channels/3445364>
+
+| Field  | Dado                       | Unidade |
+| ------ | -------------------------- | ------- |
+| field1 | Temperatura do ar          | °C      |
+| field2 | Umidade relativa           | %       |
+| field3 | VPD do ar                  | kPa     |
+| field4 | VPD da folha (offset +2°C) | kPa     |
+
+O canal exibe quatro gráficos em tempo real (Temperatura, Umidade, VPD do Ar e
+VPD Foliar) e dois gauges com os valores instantâneos de temperatura e umidade.
+O intervalo de atualização mínimo do ThingSpeak é 15 s; o firmware usa 20 s por
+padrão para respeitar essa limitação.
+
+---
 
 ## Diagnóstico
 
@@ -135,7 +275,11 @@ Faixas de referência do VPD da folha: `< 0,4` baixo · `0,4–0,8` propagação
 | Temperatura alta demais                                            | Sensor perto da placa; afaste alguns centímetros                                                                                                                                           |
 | `Tool doesn't match supported version` ou erro em `picolibc.specs` | `sdkconfig`/`build` gerados com outro toolchain — apague os dois (`rm -rf build sdkconfig`) e refaça `set-target` + `build`. O `sdkconfig` é gerado; o versionado é o `sdkconfig.defaults` |
 
+---
+
 ## Próximos passos
 
-1. Dashboard e faixas coloridas no ThingSpeak.
-2. Alertas fora de faixa.
+1. Alertas fora de faixa (e-mail / push via ThingSpeak React).
+2. Backend MQTT (`telemetry/mqtt/`) para integração com Home Assistant.
+3. Display OLED local com faixas coloridas de VPD.
+4. Migrar `hal/sht3x` e `domain/vpd` para `components/` ao reutilizar em outros projetos.
