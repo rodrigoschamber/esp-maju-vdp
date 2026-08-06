@@ -87,8 +87,15 @@ restante da aplicação.
 
 ### HAL — driver de sensor isolado
 
-`hal/sht3x` encapsula todo o protocolo I²C do SHT35. O `app_main` nunca
-manipula endereços nem comandos de barramento diretamente.
+**HAL** (_Hardware Abstraction Layer_) é uma camada que isola o restante do
+código dos detalhes específicos do hardware.
+
+`hal/sht3x` sabe como falar I²C com o SHT35 — endereços, comandos, CRC-8,
+timings. `domain/vpd` e `app_main` não sabem (e não precisam saber) nada disso
+— só chamam `sht3x_measure_single()`.
+
+Se o sensor fosse trocado por um DHT22 ou BME280, apenas `hal/` mudaria; o
+restante do código permaneceria intacto.
 
 ---
 
