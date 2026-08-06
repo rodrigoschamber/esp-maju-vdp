@@ -1,8 +1,10 @@
 # Maju — Sensor de VPD Foliar
 
 Firmware ESP-IDF para a **ESP32-DevKitC V4 (ESP32-WROOM-32UE)** com sensor
-**Sensirion SHT35 (I²C)**. Faz leitura de temperatura e umidade, cálculo do VPD
-do ar e da folha, exibição no monitor serial e envio para ThingSpeak.
+**Sensirion SHT35 (I²C)**. Lê temperatura e umidade, calcula o VPD do ar e da
+folha, exibe no monitor serial e publica em tempo real no ThingSpeak.
+
+📊 **Dashboard público:** <https://thingspeak.mathworks.com/channels/3445364>
 
 ---
 
