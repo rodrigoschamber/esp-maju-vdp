@@ -272,6 +272,55 @@ padrão para respeitar essa limitação.
 
 ---
 
+## Testes unitários
+
+Testes de host compilados com GCC nativo (sem hardware) usando o framework
+**Unity** já incluso no ESP-IDF.
+
+### Estrutura
+
+```
+test/host/
+  stubs/                      ← cabeçalhos ESP-IDF mínimos para compilação no macOS
+    esp_err.h                 # esp_err_t e códigos de erro
+    esp_log.h                 # ESP_LOGI/LOGE/LOGW → printf
+    esp_check.h               # ESP_RETURN_ON_FALSE / ESP_RETURN_ON_ERROR
+    freertos/FreeRTOS.h       # TickType_t, pdMS_TO_TICKS
+    freertos/task.h           # vTaskDelay (no-op no host)
+    driver/i2c_master.h       # tipos e assinaturas I2C
+  i2c_stub.h / i2c_stub.c    ← mock do barramento I2C (rx injetável, erro configurável)
+  test_vpd.c                  ← 14 testes: SVP (Tetens), vpd_calculate, classificar, faixa_str
+  test_sht3x.c                ← 16 testes: create/delete, conversão raw→float, CRC, erros I2C
+  test_telemetry.c            ← 6 testes: dispatch, propagação de erro, troca de backend
+  test_runner.c               ← main() com todos os RUN_TEST; setUp reseta o stub I2C
+  Makefile
+```
+
+### Cobertura
+
+| Módulo       | O que é testado                                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `domain/vpd` | `vpd_svp_kpa` (4 temperaturas), `vpd_calculate` (4 cenários), `vpd_classificar` (5 faixas + bordas), `vpd_faixa_str`                |
+| `hal/sht3x`  | criação/destruição de handle, conversão raw→°C/%, verificação CRC, falha de CRC em temperatura e umidade, erros I2C, argumento NULL |
+| `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime            |
+
+### Executar
+
+```bash
+cd test/host
+make          # compila e executa (requer IDF_PATH ou . ~/esp/esp-idf/export.sh)
+make clean    # remove o binário
+```
+
+Saída esperada:
+
+```
+36 Tests 0 Failures 0 Ignored
+OK
+```
+
+---
+
 ## Diagnóstico
 
 | Sintoma                                                            | Causa provável                                                                                                                                                                             |
