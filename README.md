@@ -1,4 +1,4 @@
-# esp-maju-vdp — Sensor de VPD para estufa
+# esp-maju-vdp — Sensor de VPD Foliar
 
 Firmware ESP-IDF para a **ESP32-DevKitC V4 (ESP32-WROOM-32UE)** com sensor
 **Sensirion SHT35 (I²C)**. Faz leitura de temperatura e umidade, cálculo do VPD
