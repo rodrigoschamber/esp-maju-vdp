@@ -1,4 +1,4 @@
-menu "Estufa VPD - Configuracao"
+menu "Sensor VPD - Configuracao"
 
     config MAJU_I2C_SDA_GPIO
         int "GPIO do SDA (I2C)"

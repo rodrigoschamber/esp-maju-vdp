@@ -27,7 +27,7 @@
 #include "wifi_env.h"
 #include "telemetry_thingspeak.h"
 
-static const char *TAG = "estufa";
+static const char *TAG = "maju";
 
 #define I2C_PORT            I2C_NUM_0
 #define I2C_SDA_GPIO        CONFIG_MAJU_I2C_SDA_GPIO
@@ -234,7 +234,7 @@ static void print_reading(float t, float rh, const vpd_result_t *v)
 
     printf("\n");
     printf("+--------------------------------------------------------------+\n");
-    printf("| ESTUFA - LEITURA                                             |\n");
+    printf("| LEITURA                                             |\n");
     printf("+--------------------------------------------------------------+\n");
     printf("| Temperatura do ar .......... %6.2f  C                       |\n", t);
     printf("| Umidade relativa ........... %6.2f  %%                       |\n", rh);
@@ -255,7 +255,7 @@ static void print_reading(float t, float rh, const vpd_result_t *v)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "esp-maju-vdp - sensor de VPD para estufa");
+    ESP_LOGI(TAG, "maju - sensor de VPD");
     ESP_LOGI(TAG, "Intervalo de leitura: %d ms | offset de folha: %+.1f C",
              SAMPLE_INTERVAL_MS, LEAF_OFFSET_C);
 

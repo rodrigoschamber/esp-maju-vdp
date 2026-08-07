@@ -1,6 +1,6 @@
 /*
  * Calculo do VPD (deficit de pressao de vapor) a partir de temperatura e
- * umidade relativa. Formulas conforme o planejamento do sensor de estufa.
+ * umidade relativa. Formulas conforme o planejamento do sensor de VPD.
  */
 #pragma once
 

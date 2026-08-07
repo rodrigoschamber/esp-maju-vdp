@@ -148,7 +148,7 @@ MAJU_THINGSPEAK_URL="https://api.thingspeak.com/update"
 Opções adicionais via `menuconfig`:
 
 ```bash
-idf.py menuconfig   # → "Estufa VPD - Configuracao"
+idf.py menuconfig   # → "Sensor VPD - Configuracao"
 ```
 
 | Opção                    | Padrão             |
@@ -169,7 +169,7 @@ Na primeira gravação pode ser necessário instalar o driver USB-UART
 cd ~/esp/esp-maju-vdp
 . $HOME/esp/esp-idf/export.sh                     # ambiente do ESP-IDF (1x por terminal)
 idf.py set-target esp32                           # só na primeira vez / ao trocar de alvo
-idf.py menuconfig                                 # "Estufa VPD - Configuracao"
+idf.py menuconfig                                 # "Sensor VPD - Configuracao"
 idf.py build                                      # compila
 ls /dev/cu.*                                      # descobre a porta serial
 idf.py -p /dev/cu.usbserial-0001 flash monitor    # grava e abre o monitor
@@ -227,15 +227,15 @@ de água que a folha exerce — muito baixo → fungos; muito alto → estresse 
 ## Saída esperada
 
 ```
-I (312) estufa: esp-maju-vdp - sensor de VPD para estufa
-I (312) estufa: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
-I (322) estufa: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
-I (332) estufa: SHT35 encontrado no endereco 0x44
-I (342) estufa: Status do sensor: 0x8010
-I (352) estufa: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
+I (312) maju: maju - sensor de VPD
+I (312) maju: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
+I (322) maju: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
+I (332) maju: SHT35 encontrado no endereco 0x44
+I (342) maju: Status do sensor: 0x8010
+I (352) maju: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
 
 +--------------------------------------------------------------+
-| ESTUFA - LEITURA                                             |
+| LEITURA                                             |
 +--------------------------------------------------------------+
 | Temperatura do ar ..........  24.83  C                       |
 | Umidade relativa ...........  62.14  %                       |
@@ -248,8 +248,8 @@ I (352) estufa: ThingSpeak ativo: enviando para https://api.thingspeak.com/updat
 | VPD da folha ...............  0.832 kPa                      |
 +--------------------------------------------------------------+
   Faixa: vegetativo (0,8-1,2) - crescimento saudavel
-I (2352) estufa: field1=24.83 field2=62.14 field3=1.187 field4=0.832
-I (2472) estufa: ThingSpeak atualizado com sucesso (entry_id=123)
+I (2352) maju: field1=24.83 field2=62.14 field3=1.187 field4=0.832
+I (2472) maju: ThingSpeak atualizado com sucesso (entry_id=123)
 ```
 
 ---
