@@ -1,5 +1,6 @@
 #include "unity.h"
 #include "i2c_stub.h"
+#include <stdbool.h>
 
 /* --- declaracoes dos testes (definidos em test_vpd.c) ---------------------- */
 void test_vpd_svp_at_0c(void);
@@ -43,11 +44,26 @@ void test_telemetry_deinit_dispatches(void);
 void test_telemetry_swap_backend(void);
 void test_telemetry_backend_struct_populated(void);
 
+/* --- declaracoes dos testes (definidos em test_thingspeak.c) --------------- */
+void test_thingspeak_backend_struct_populated(void);
+void test_thingspeak_init_returns_ok(void);
+void test_thingspeak_send_payload_fields(void);
+void test_thingspeak_send_success_entry_id(void);
+void test_thingspeak_send_empty_response_no_crash(void);
+void test_thingspeak_send_http_error_no_crash(void);
+void test_thingspeak_send_perform_fail_no_crash(void);
+void test_thingspeak_send_init_null_no_crash(void);
+void test_thingspeak_url_set_in_request(void);
+
+/* controle do stub HTTP (definido em thingspeak_http_stub.c) */
+void ts_stub_reset(void);
+
 /* --- setUp/tearDown globais ------------------------------------------------- */
 
 void setUp(void)
 {
     i2c_stub_reset();
+    ts_stub_reset();
 }
 
 void tearDown(void) {}
@@ -99,6 +115,17 @@ int main(void)
     RUN_TEST(test_telemetry_deinit_dispatches);
     RUN_TEST(test_telemetry_swap_backend);
     RUN_TEST(test_telemetry_backend_struct_populated);
+
+    /* telemetry/thingspeak */
+    RUN_TEST(test_thingspeak_backend_struct_populated);
+    RUN_TEST(test_thingspeak_init_returns_ok);
+    RUN_TEST(test_thingspeak_send_payload_fields);
+    RUN_TEST(test_thingspeak_send_success_entry_id);
+    RUN_TEST(test_thingspeak_send_empty_response_no_crash);
+    RUN_TEST(test_thingspeak_send_http_error_no_crash);
+    RUN_TEST(test_thingspeak_send_perform_fail_no_crash);
+    RUN_TEST(test_thingspeak_send_init_null_no_crash);
+    RUN_TEST(test_thingspeak_url_set_in_request);
 
     return UNITY_END();
 }

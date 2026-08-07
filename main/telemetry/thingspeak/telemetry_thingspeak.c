@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Evita que o IntelliSense no macOS siga headers Mach-O no contexto ESP32. */
 #if defined(__INTELLISENSE__)
@@ -20,6 +21,25 @@
 #include "telemetry_thingspeak.h"
 
 static const char *TAG = "thingspeak";
+
+/* Buffer acumulado via HTTP_EVENT_ON_DATA; perform() já consumiu o body. */
+static char s_resp_buf[32];
+static int  s_resp_len;
+
+static esp_err_t ts_http_event_handler(esp_http_client_event_t *evt)
+{
+    if (evt->event_id == HTTP_EVENT_ON_DATA) {
+        int copy = evt->data_len;
+        if (s_resp_len + copy >= (int)sizeof(s_resp_buf) - 1)
+            copy = (int)sizeof(s_resp_buf) - 1 - s_resp_len;
+        if (copy > 0) {
+            memcpy(s_resp_buf + s_resp_len, evt->data, copy);
+            s_resp_len += copy;
+            s_resp_buf[s_resp_len] = '\0';
+        }
+    }
+    return ESP_OK;
+}
 
 static esp_err_t ts_init(void)
 {
@@ -46,11 +66,15 @@ static void ts_send(float t, float rh, const vpd_result_t *v)
         return;
     }
 
+    s_resp_buf[0] = '\0';
+    s_resp_len    = 0;
+
     esp_http_client_config_t cfg = {
-        .url = MAJU_THINGSPEAK_URL_ENV,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = 10000,
+        .url               = MAJU_THINGSPEAK_URL_ENV,
+        .method            = HTTP_METHOD_POST,
+        .timeout_ms        = 10000,
         .crt_bundle_attach = esp_crt_bundle_attach,
+        .event_handler     = ts_http_event_handler,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
@@ -65,23 +89,18 @@ static void ts_send(float t, float rh, const vpd_result_t *v)
     esp_err_t err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
 
-    char response[32] = {0};
-    int read_len = esp_http_client_read_response(client, response, sizeof(response) - 1);
-    if (read_len > 0) {
-        response[read_len] = '\0';
-    }
-
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Falha ao enviar ThingSpeak: %s", esp_err_to_name(err));
     } else if (status != 200) {
-        ESP_LOGE(TAG, "ThingSpeak retornou HTTP %d (resp=%s)", status, read_len > 0 ? response : "sem corpo");
+        ESP_LOGE(TAG, "ThingSpeak retornou HTTP %d (resp=%s)", status,
+                 s_resp_len > 0 ? s_resp_buf : "sem corpo");
     } else {
-        long entry_id = strtol(response, NULL, 10);
+        long entry_id = strtol(s_resp_buf, NULL, 10);
         if (entry_id > 0) {
             ESP_LOGI(TAG, "ThingSpeak atualizado com sucesso (entry_id=%ld)", entry_id);
         } else {
             ESP_LOGW(TAG, "ThingSpeak respondeu sem confirmar entry_id (resp=%s)",
-                     read_len > 0 ? response : "vazio");
+                     s_resp_len > 0 ? s_resp_buf : "vazio");
         }
     }
 
