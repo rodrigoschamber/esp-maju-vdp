@@ -8,6 +8,23 @@ folha, exibe no monitor serial e publica em tempo real no ThingSpeak.
 
 ---
 
+## Índice
+
+1. [Ligação elétrica](#ligação-elétrica)
+2. [Estrutura do código](#estrutura-do-código)
+3. [Design patterns](#design-patterns)
+4. [Expansão](#expansão)
+5. [Configuração](#configuração)
+6. [Comandos](#comandos)
+7. [Fórmulas e cálculos](#fórmulas-e-cálculos)
+8. [Saída esperada](#saída-esperada)
+9. [Dashboard ThingSpeak](#dashboard-thingspeak)
+10. [Testes unitários](#testes-unitários)
+11. [Diagnóstico](#diagnóstico)
+12. [Próximos passos](#próximos-passos)
+
+---
+
 ## Ligação elétrica
 
 | Pino do SHT35 | Pino do ESP32       |
