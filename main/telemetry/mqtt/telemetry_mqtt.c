@@ -136,7 +136,7 @@ static void mqtt_send(float t, float rh, const vpd_result_t *v)
 
     char payload[128];
     int len = snprintf(payload, sizeof(payload),
-                       "{\"t\":%.2f,\"rh\":%.2f,\"vpd_ar\":%.3f,\"vpd_folha\":%.3f}",
+                       "field1=%.2f&field2=%.2f&field3=%.3f&field4=%.3f",
                        t, rh, v->vpd_ar, v->vpd_folha);
     if (len <= 0 || len >= (int)sizeof(payload)) {
         ESP_LOGE(TAG, "Payload MQTT excedeu o limite do buffer.");

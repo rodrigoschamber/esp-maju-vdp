@@ -99,7 +99,7 @@ void test_mqtt_send_payload_contains_temperature(void)
     init_connected();
     vpd_result_t v = make_vpd();
     mqtt_backend.send(25.0f, 60.0f, &v);
-    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "\"t\":25.00"));
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field1=25.00"));
     mqtt_backend.deinit();
 }
 
@@ -108,7 +108,7 @@ void test_mqtt_send_payload_contains_humidity(void)
     init_connected();
     vpd_result_t v = make_vpd();
     mqtt_backend.send(25.0f, 60.0f, &v);
-    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "\"rh\":60.00"));
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field2=60.00"));
     mqtt_backend.deinit();
 }
 
@@ -117,8 +117,8 @@ void test_mqtt_send_payload_contains_vpd_fields(void)
     init_connected();
     vpd_result_t v = make_vpd();
     mqtt_backend.send(25.0f, 60.0f, &v);
-    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "\"vpd_ar\":1.234"));
-    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "\"vpd_folha\":1.567"));
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field3=1.234"));
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field4=1.567"));
     mqtt_backend.deinit();
 }
 
