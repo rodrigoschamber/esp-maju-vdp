@@ -55,9 +55,6 @@ static uint8_t s_sensor_addr = SHT35_ADDR;
 static EventGroupHandle_t s_wifi_event_group;
 static int s_wifi_retries;
 
-/* MQTT roda na propria task interna; send() e nao-bloqueante (QoS 0).       */
-/* ThingSpeak bloqueia no HTTP; as duas operacoes ocorrem em paralelo porque  */
-/* o MQTT task envia enquanto a task principal aguarda a resposta HTTP.       */
 static const telemetry_backend_t *const s_backends[] = {
     &mqtt_backend,
     &thingspeak_backend,

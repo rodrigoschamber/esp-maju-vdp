@@ -1,6 +1,3 @@
-## IDF Component Manager Manifest
-## Adiciona o componente MQTT gerenciado (necessario no ESP-IDF v6.x-dev,
-## onde o mqtt nao esta mais embutido como componente interno).
 dependencies:
   espressif/mqtt:
     version: ">=1.0.0"
