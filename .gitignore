@@ -8,3 +8,7 @@ sdkconfig.old
 .env
 
 managed_components
+
+# Artefatos de compilacao dos testes de host
+test/host/run_tests
+test/host/run_tests.dSYM/

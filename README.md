@@ -97,14 +97,20 @@ typedef struct {
 } telemetry_backend_t;
 ```
 
-`app_main` usa apenas um ponteiro para essa interface:
+`app_main` mantém um array terminado em `NULL` com todos os backends ativos:
 
 ```c
-static const telemetry_backend_t *s_telemetry = &thingspeak_backend;
+static const telemetry_backend_t *const s_backends[] = {
+    &mqtt_backend,
+    &thingspeak_backend,
+    NULL,
+};
 ```
 
-Para trocar de plataforma, basta apontar para outro backend — sem tocar no
-restante da aplicação.
+Cada leitura itera o array chamando `send()` em sequência — MQTT retorna
+imediatamente (QoS 0, fire-and-forget) enquanto o ThingSpeak processa em
+parallel via sua task interna. Para adicionar um novo backend, basta incluí-lo
+no array; nenhuma outra parte do código muda.
 
 ### HAL — driver de sensor isolado
 
@@ -273,7 +279,7 @@ O componente esp-mqtt \u00e9 declarado em `main/idf_component.yml` e baixado
 automaticamente pelo IDF Component Manager na primeira compila\u00e7\u00e3o:
 
 ```bash
-idf.py build   # baixa espressif/mqtt >= 1.4.0 automaticamente
+idf.py build   # baixa espressif/mqtt >= 1.0.0 automaticamente
 ```
 
 ---
@@ -346,10 +352,9 @@ I (312) maju: maju - sensor de VPD
 I (312) maju: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
 I (322) maju: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
 I (322) maju: MQTT ativo: broker=mqtt://broker.example.com:1883, topico=maju/vpd
-I (322) maju: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
-I (332) maju: SHT35 encontrado no endereco 0x44
-I (342) maju: Status do sensor: 0x8010
-I (352) maju: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
+I (332) maju: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
+I (342) maju: SHT35 encontrado no endereco 0x44
+I (352) maju: Status do sensor: 0x8010
 
 +--------------------------------------------------------------+
 | LEITURA                                             |
@@ -414,20 +419,20 @@ test/host/
   test_sht3x.c                ← 16 testes: create/delete, conversão raw→float, CRC, erros I2C
   test_telemetry.c            ← 6 testes: dispatch, propagação de erro, troca de backend
   test_thingspeak.c           ← 9 testes: payload, resposta HTTP, erros, URL
-  test_mqtt.c                 ← 18 testes: init, send, desconexão, falhas, isolamento
+  test_mqtt.c                 ← 20 testes: init, send, desconexão, falhas, erros de transporte/recusa, isolamento
   test_runner.c               ← main() com todos os RUN_TEST; setUp reseta os stubs
   Makefile
 ```
 
 ### Cobertura
 
-| Módulo       | O que é testado                                                                                                                                                                                                                          |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `domain/vpd` | `vpd_svp_kpa` (4 temperaturas), `vpd_calculate` (4 cenários), `vpd_classificar` (5 faixas + bordas), `vpd_faixa_str`                                                                                                                     |
-| `hal/sht3x`  | criação/destruição de handle, conversão raw→°C/%, verificação CRC, falha de CRC em temperatura e umidade, erros I2C, argumento NULL                                                                                                      |
-| `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime                                                                                                                 |
-| `thingspeak` | payload HTTP, campos field1–4, resposta com entry_id, corpo vazio, erro HTTP 4xx/5xx, falha no perform, cliente NULL, URL                                                                                                                |
-| `mqtt`       | struct populada, init (ok, cliente null, start fail, register fail), send (tópico, payload JSON, contagem, sem conexão, desconexão, falha no publish), deinit idempotente, isolamento (falha MQTT ≠ ThingSpeak; falha ThingSpeak ≠ MQTT) |
+| Módulo       | O que é testado                                                                                                                                                                                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `domain/vpd` | `vpd_svp_kpa` (4 temperaturas), `vpd_calculate` (4 cenários), `vpd_classificar` (5 faixas + bordas), `vpd_faixa_str`                                                                                                                                                                 |
+| `hal/sht3x`  | criação/destruição de handle, conversão raw→°C/%, verificação CRC, falha de CRC em temperatura e umidade, erros I2C, argumento NULL                                                                                                                                                  |
+| `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime                                                                                                                                                             |
+| `thingspeak` | payload HTTP, campos field1–4, resposta com entry_id, corpo vazio, erro HTTP 4xx/5xx, falha no perform, cliente NULL, URL                                                                                                                                                            |
+| `mqtt`       | struct populada, init (ok, cliente null, start fail, register fail), send (tópico, payload JSON, contagem, sem conexão, desconexão, falha no publish), deinit idempotente, erros de transporte TCP e conexão recusada, isolamento (falha MQTT ≠ ThingSpeak; falha ThingSpeak ≠ MQTT) |
 
 ### Executar
 
@@ -440,7 +445,7 @@ make clean    # remove o binário
 Saída esperada:
 
 ```
-63 Tests 0 Failures 0 Ignored
+65 Tests 0 Failures 0 Ignored
 OK
 ```
 
@@ -454,6 +459,7 @@ OK
 | `ESP_ERR_INVALID_CRC`                                              | Ruído no barramento — encurte os fios ou baixe a frequência do I²C                                                                                                                         |
 | Reinícios (brownout)                                               | Fonte fraca — use 5 V ≥ 1 A e cabo de qualidade                                                                                                                                            |
 | Temperatura alta demais                                            | Sensor perto da placa; afaste alguns centímetros                                                                                                                                           |
+| `MQTT erro de transporte (errno=202, tls_err=0x8001)`              | DNS falhou — `MAJU_MQTT_BROKER_URI` aponta para host inválido ou inacessível. O esp-mqtt reconecta automaticamente; verifique a URI no `.env` e a conectividade Wi-Fi                      |
 | `Tool doesn't match supported version` ou erro em `picolibc.specs` | `sdkconfig`/`build` gerados com outro toolchain — apague os dois (`rm -rf build sdkconfig`) e refaça `set-target` + `build`. O `sdkconfig` é gerado; o versionado é o `sdkconfig.defaults` |
 
 ---
