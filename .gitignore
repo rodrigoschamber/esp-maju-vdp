@@ -6,3 +6,5 @@ sdkconfig.old
 
 # Credenciais locais (nao versionar)
 .env
+
+managed_components

@@ -6,3 +6,9 @@
 #define MAJU_LEAF_OFFSET_C_ENV            (-2.0f)
 #define MAJU_WIFI_SSID_ENV                "test_ssid"
 #define MAJU_WIFI_PASSWORD_ENV            "test_password"
+#define MAJU_MQTT_ENABLE_ENV              1
+#define MAJU_MQTT_BROKER_URI_ENV          "mqtt://test.mosquitto.org:1883"
+#define MAJU_MQTT_USERNAME_ENV            ""
+#define MAJU_MQTT_PASSWORD_ENV            ""
+#define MAJU_MQTT_TOPIC_ENV               "maju/vpd/test"
+#define MAJU_MQTT_CLIENT_ID_ENV           "maju_vpd_test"

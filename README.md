@@ -2,7 +2,7 @@
 
 Firmware ESP-IDF para a **ESP32-DevKitC V4 (ESP32-WROOM-32UE)** com sensor
 **Sensirion SHT35 (I²C)**. Lê temperatura e umidade, calcula o VPD do ar e da
-folha, exibe no monitor serial e publica em tempo real no ThingSpeak.
+folha, exibe no monitor serial e publica em tempo real no ThingSpeak e via MQTT.
 
 📊 **Dashboard público:** <https://thingspeak.mathworks.com/channels/3445364>
 
@@ -15,13 +15,14 @@ folha, exibe no monitor serial e publica em tempo real no ThingSpeak.
 3. [Design patterns](#design-patterns)
 4. [Expansão](#expansão)
 5. [Configuração](#configuração)
-6. [Comandos](#comandos)
-7. [Fórmulas e cálculos](#fórmulas-e-cálculos)
-8. [Saída esperada](#saída-esperada)
-9. [Dashboard ThingSpeak](#dashboard-thingspeak)
-10. [Testes unitários](#testes-unitários)
-11. [Diagnóstico](#diagnóstico)
-12. [Próximos passos](#próximos-passos)
+6. [Integração MQTT](#integração-mqtt)
+7. [Comandos](#comandos)
+8. [Fórmulas e cálculos](#fórmulas-e-cálculos)
+9. [Saída esperada](#saída-esperada)
+10. [Dashboard ThingSpeak](#dashboard-thingspeak)
+11. [Testes unitários](#testes-unitários)
+12. [Diagnóstico](#diagnóstico)
+13. [Próximos passos](#próximos-passos)
 
 ---
 
@@ -50,14 +51,17 @@ folha, exibe no monitor serial e publica em tempo real no ThingSpeak.
 esp-maju-vdp/
 ├── main/
 │   ├── esp_maju_vdp_main.c          # app_main: orquestração geral
+│   ├── idf_component.yml            # dependência: espressif/mqtt (IDF Component Manager)
 │   ├── hal/
 │   │   ├── sht3x.c / sht3x.h        # driver I²C do SHT3x (CRC-8, single-shot)
 │   ├── domain/
 │   │   ├── vpd.c / vpd.h            # fórmulas de VPD e faixas de referência
 │   ├── telemetry/
 │   │   ├── telemetry.h              # interface genérica telemetry_backend_t
-│   │   └── thingspeak/
-│   │       ├── telemetry_thingspeak.c / .h  # backend ThingSpeak (HTTP POST)
+│   │   ├── thingspeak/
+│   │   │   ├── telemetry_thingspeak.c / .h  # backend ThingSpeak (HTTP POST)
+│   │   └── mqtt/
+│   │       ├── telemetry_mqtt.c / .h        # backend MQTT (esp-mqtt, QoS 0)
 │   ├── Kconfig.projbuild            # configuração via menuconfig
 │   ├── wifi_env.h.in                # template gerado em build time
 │   └── CMakeLists.txt
@@ -69,12 +73,12 @@ esp-maju-vdp/
 
 ### Separação de responsabilidades
 
-| Layer       | Pasta                 | Depende de                 |
-| ----------- | --------------------- | -------------------------- |
-| HAL         | `hal/`                | `esp_driver_i2c`           |
-| Domain      | `domain/`             | nada (C puro)              |
-| Telemetry   | `telemetry/`          | `esp_http_client`, `vpd.h` |
-| Application | `esp_maju_vdp_main.c` | todos os layers acima      |
+| Layer       | Pasta                 | Depende de                         |
+| ----------- | --------------------- | ---------------------------------- |
+| HAL         | `hal/`                | `esp_driver_i2c`                   |
+| Domain      | `domain/`             | nada (C puro)                      |
+| Telemetry   | `telemetry/`          | `esp_http_client`, `mqtt`, `vpd.h` |
+| Application | `esp_maju_vdp_main.c` | todos os layers acima              |
 
 ---
 
@@ -118,16 +122,20 @@ restante do código permaneceria intacto.
 
 ## Expansão
 
-### Adicionar um novo backend de telemetria (ex.: MQTT)
+### Adicionar um novo backend de telemetria
 
-1. Criar `main/telemetry/mqtt/telemetry_mqtt.c` e `telemetry_mqtt.h`.
-2. Implementar as três funções (`init`, `send`, `deinit`) e exportar `mqtt_backend`.
-3. Adicionar o `.c` ao `SRCS` e o diretório ao `INCLUDE_DIRS` em `CMakeLists.txt`.
-4. Em `esp_maju_vdp_main.c`, alterar apenas uma linha:
+O projeto já contém dois backends em produção:
 
-```c
-static const telemetry_backend_t *s_telemetry = &mqtt_backend;
-```
+- `thingspeak_backend` — HTTP POST para a API do ThingSpeak
+- `mqtt_backend` — publicação MQTT via esp-mqtt (QoS 0, fire-and-forget)
+
+Ambos são registrados no array `s_backends[]` em `esp_maju_vdp_main.c`. Para
+adicionar um terceiro backend (ex.: InfluxDB):
+
+1. Criar `main/telemetry/influxdb/telemetry_influxdb.c` e `.h`.
+2. Implementar `init`, `send`, `deinit` e exportar `influxdb_backend`.
+3. Adicionar `.c` ao `SRCS` e o diretório ao `INCLUDE_DIRS` em `CMakeLists.txt`.
+4. Incluir `&influxdb_backend` no array `s_backends[]` em `app_main`.
 
 ### Migrar para componentes ESP-IDF (`components/`)
 
@@ -152,15 +160,26 @@ Edite o `.env`:
 MAJU_WIFI_SSID="ssid"
 MAJU_WIFI_PASSWORD="password"
 MAJU_LEAF_OFFSET_C="+2.0"
+
+# ThingSpeak
 MAJU_THINGSPEAK_ENABLE="1"
 MAJU_THINGSPEAK_WRITE_API_KEY="SUA_WRITE_API_KEY"
 MAJU_THINGSPEAK_URL="https://api.thingspeak.com/update"
+
+# MQTT
+MAJU_MQTT_ENABLE="1"
+MAJU_MQTT_BROKER_URI="mqtt://broker.example.com:1883"
+MAJU_MQTT_USERNAME=""
+MAJU_MQTT_PASSWORD=""
+MAJU_MQTT_TOPIC="maju/vpd"
+MAJU_MQTT_CLIENT_ID="maju_vpd"
 ```
 
 - `MAJU_LEAF_OFFSET_C`: diferença de temperatura entre ar e folha em °C.
   - `+2.0` → folha 2 °C mais fria que o ar (típico em ambientes controlados).
   - `-1.0` → folha mais quente (sob luz intensa sem transpiração suficiente).
 - `MAJU_THINGSPEAK_ENABLE=1` ativa o envio; `0` desativa sem recompilar.
+- `MAJU_MQTT_ENABLE=1` ativa o MQTT; `0` desativa sem recompilar.
 
 Opções adicionais via `menuconfig`:
 
@@ -177,6 +196,85 @@ idf.py menuconfig   # → "Sensor VPD - Configuracao"
 
 Na primeira gravação pode ser necessário instalar o driver USB-UART
 (família CP210x/CH34x) para que a porta apareça em `ls /dev/cu.*`.
+
+---
+
+## Integração MQTT
+
+### Visão geral
+
+O backend MQTT publica cada leitura como uma mensagem JSON em paralelo com a
+chamada HTTP ao ThingSpeak. A implementação usa o componente **esp-mqtt**
+(`espressif/mqtt` via IDF Component Manager) com TLS automático via
+`esp_crt_bundle_attach`.
+
+### Arquitetura e fluxo de envio
+
+```
+loop de leitura (SAMPLE_INTERVAL_MS)
+│
+├─── mqtt_backend.send()     ← QoS 0, fire-and-forget; retorna imediatamente
+│       └─ mqtt_task (interno do esp-mqtt) envia a mensagem em background
+│
+└─── thingspeak_backend.send() ← HTTP POST bloqueante (timeout 10 s)
+```
+
+As duas opera\u00e7\u00f5es ocorrem **em paralelo**: `mqtt_backend.send()` encaminha a
+mensagem para a task interna do esp-mqtt e retorna antes de o ThingSpeak
+terminar. Uma falha em qualquer um dos backends **n\u00e3o interrompe o outro**.
+
+### Formato da mensagem MQTT
+
+```json
+{ "t": 24.83, "rh": 62.14, "vpd_ar": 1.187, "vpd_folha": 0.832 }
+```
+
+| Campo       | Dado              | Unidade |
+| ----------- | ----------------- | ------- |
+| `t`         | Temperatura do ar | \u00b0C |
+| `rh`        | Umidade relativa  | %       |
+| `vpd_ar`    | VPD do ar         | kPa     |
+| `vpd_folha` | VPD da folha      | kPa     |
+
+### Vari\u00e1veis de ambiente MQTT
+
+| Vari\u00e1vel          | Obrigat\u00f3ria quando MQTT ativo | Descri\u00e7\u00e3o                                                   |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| `MAJU_MQTT_ENABLE`     | \u2014                             | `1`/`true`/`on`/`yes` para ativar; `0` para desativar                 |
+| `MAJU_MQTT_BROKER_URI` | Sim                                | URI completa do broker (ex.: `mqtt://host:1883`, `mqtts://host:8883`) |
+| `MAJU_MQTT_USERNAME`   | N\u00e3o                           | Usu\u00e1rio MQTT (deixe vazio se n\u00e3o necess\u00e1rio)           |
+| `MAJU_MQTT_PASSWORD`   | N\u00e3o                           | Senha MQTT — n\u00e3o \u00e9 exibida em logs                          |
+| `MAJU_MQTT_TOPIC`      | Sim                                | T\u00f3pico de publica\u00e7\u00e3o (ex.: `maju/vpd`)                 |
+| `MAJU_MQTT_CLIENT_ID`  | N\u00e3o                           | Client ID (padr\u00e3o: `maju_vpd`)                                   |
+
+### Comportamento em caso de falha
+
+| Cen\u00e1rio                           | Comportamento                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| Broker MQTT indispon\u00edvel          | `send()` loga aviso e descarta a leitura; ThingSpeak n\u00e3o \u00e9 afetado     |
+| Broker MQTT fica acess\u00edvel depois | O esp-mqtt reconecta automaticamente; pr\u00f3ximas leituras s\u00e3o publicadas |
+| ThingSpeak retorna erro HTTP           | `send()` loga o erro; MQTT n\u00e3o \u00e9 afetado                               |
+| ThingSpeak excede timeout (10 s)       | MQTT j\u00e1 terminou antes; aguarda o ThingSpeak retornar                       |
+
+### TLS
+
+Use o esquema `mqtts://` na URI para habilitar TLS autom\u00e1tico:
+
+```dotenv
+MAJU_MQTT_BROKER_URI="mqtts://broker.example.com:8883"
+```
+
+O bundle de certificados do ESP-IDF (`esp_crt_bundle_attach`) \u00e9 inclu\u00eddo
+automaticamente e valida a cadeia de certificados do broker.
+
+### Depend\u00eancia
+
+O componente esp-mqtt \u00e9 declarado em `main/idf_component.yml` e baixado
+automaticamente pelo IDF Component Manager na primeira compila\u00e7\u00e3o:
+
+```bash
+idf.py build   # baixa espressif/mqtt >= 1.4.0 automaticamente
+```
 
 ---
 
@@ -246,6 +344,8 @@ de água que a folha exerce — muito baixo → fungos; muito alto → estresse 
 ```
 I (312) maju: maju - sensor de VPD
 I (312) maju: Intervalo de leitura: 20000 ms | offset de folha: +2.0 C
+I (322) maju: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
+I (322) maju: MQTT ativo: broker=mqtt://broker.example.com:1883, topico=maju/vpd
 I (322) maju: Barramento I2C pronto (SDA=GPIO21, SCL=GPIO22, 100000 Hz)
 I (332) maju: SHT35 encontrado no endereco 0x44
 I (342) maju: Status do sensor: 0x8010
@@ -266,6 +366,7 @@ I (352) maju: ThingSpeak ativo: enviando para https://api.thingspeak.com/update
 +--------------------------------------------------------------+
   Faixa: vegetativo (0,8-1,2) - crescimento saudavel
 I (2352) maju: field1=24.83 field2=62.14 field3=1.187 field4=0.832
+I (2360) mqtt: MQTT publicado: topico=maju/vpd
 I (2472) maju: ThingSpeak atualizado com sucesso (entry_id=123)
 ```
 
@@ -305,21 +406,28 @@ test/host/
     freertos/FreeRTOS.h       # TickType_t, pdMS_TO_TICKS
     freertos/task.h           # vTaskDelay (no-op no host)
     driver/i2c_master.h       # tipos e assinaturas I2C
+    mqtt_client.h             # tipos e assinaturas do esp-mqtt (stub)
   i2c_stub.h / i2c_stub.c    ← mock do barramento I2C (rx injetável, erro configurável)
+  thingspeak_http_stub.c      ← mock do esp_http_client para o backend ThingSpeak
+  mqtt_stub.c                 ← mock do esp_mqtt_client para o backend MQTT
   test_vpd.c                  ← 14 testes: SVP (Tetens), vpd_calculate, classificar, faixa_str
   test_sht3x.c                ← 16 testes: create/delete, conversão raw→float, CRC, erros I2C
   test_telemetry.c            ← 6 testes: dispatch, propagação de erro, troca de backend
-  test_runner.c               ← main() com todos os RUN_TEST; setUp reseta o stub I2C
+  test_thingspeak.c           ← 9 testes: payload, resposta HTTP, erros, URL
+  test_mqtt.c                 ← 18 testes: init, send, desconexão, falhas, isolamento
+  test_runner.c               ← main() com todos os RUN_TEST; setUp reseta os stubs
   Makefile
 ```
 
 ### Cobertura
 
-| Módulo       | O que é testado                                                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `domain/vpd` | `vpd_svp_kpa` (4 temperaturas), `vpd_calculate` (4 cenários), `vpd_classificar` (5 faixas + bordas), `vpd_faixa_str`                |
-| `hal/sht3x`  | criação/destruição de handle, conversão raw→°C/%, verificação CRC, falha de CRC em temperatura e umidade, erros I2C, argumento NULL |
-| `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime            |
+| Módulo       | O que é testado                                                                                                                                                                                                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `domain/vpd` | `vpd_svp_kpa` (4 temperaturas), `vpd_calculate` (4 cenários), `vpd_classificar` (5 faixas + bordas), `vpd_faixa_str`                                                                                                                     |
+| `hal/sht3x`  | criação/destruição de handle, conversão raw→°C/%, verificação CRC, falha de CRC em temperatura e umidade, erros I2C, argumento NULL                                                                                                      |
+| `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime                                                                                                                 |
+| `thingspeak` | payload HTTP, campos field1–4, resposta com entry_id, corpo vazio, erro HTTP 4xx/5xx, falha no perform, cliente NULL, URL                                                                                                                |
+| `mqtt`       | struct populada, init (ok, cliente null, start fail, register fail), send (tópico, payload JSON, contagem, sem conexão, desconexão, falha no publish), deinit idempotente, isolamento (falha MQTT ≠ ThingSpeak; falha ThingSpeak ≠ MQTT) |
 
 ### Executar
 
@@ -332,7 +440,7 @@ make clean    # remove o binário
 Saída esperada:
 
 ```
-36 Tests 0 Failures 0 Ignored
+63 Tests 0 Failures 0 Ignored
 OK
 ```
 
@@ -353,6 +461,6 @@ OK
 ## Próximos passos
 
 1. Alertas fora de faixa (e-mail / push via ThingSpeak React).
-2. Backend MQTT (`telemetry/mqtt/`) para integração com Home Assistant.
+2. Integração com Home Assistant via MQTT Discovery (tópico `homeassistant/sensor/maju_vpd/config`).
 3. Display OLED local com faixas coloridas de VPD.
 4. Migrar `hal/sht3x` e `domain/vpd` para `components/` ao reutilizar em outros projetos.

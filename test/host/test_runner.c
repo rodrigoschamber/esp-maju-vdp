@@ -58,12 +58,38 @@ void test_thingspeak_url_set_in_request(void);
 /* controle do stub HTTP (definido em thingspeak_http_stub.c) */
 void ts_stub_reset(void);
 
+/* controle do stub MQTT (definido em mqtt_stub.c) */
+void mqtt_stub_reset(void);
+
+/* --- declaracoes dos testes (definidos em test_mqtt.c) --------------------- */
+void test_mqtt_backend_struct_populated(void);
+void test_mqtt_init_returns_ok_when_connected(void);
+void test_mqtt_init_fails_when_client_null(void);
+void test_mqtt_init_fails_when_start_fails(void);
+void test_mqtt_init_fails_when_register_fails(void);
+void test_mqtt_send_publishes_to_correct_topic(void);
+void test_mqtt_send_payload_contains_temperature(void);
+void test_mqtt_send_payload_contains_humidity(void);
+void test_mqtt_send_payload_contains_vpd_fields(void);
+void test_mqtt_send_increments_publish_count(void);
+void test_mqtt_send_skips_when_not_connected(void);
+void test_mqtt_send_skips_after_disconnect(void);
+void test_mqtt_send_handles_publish_failure_no_crash(void);
+void test_mqtt_deinit_idempotent(void);
+void test_mqtt_deinit_clears_connected_state(void);
+void test_mqtt_failure_does_not_block_thingspeak(void);
+void test_thingspeak_failure_does_not_affect_mqtt(void);
+void test_mqtt_unavailable_thingspeak_still_sends(void);
+void test_mqtt_error_tcp_transport_no_crash(void);
+void test_mqtt_error_connection_refused_no_crash(void);
+
 /* --- setUp/tearDown globais ------------------------------------------------- */
 
 void setUp(void)
 {
     i2c_stub_reset();
     ts_stub_reset();
+    mqtt_stub_reset();
 }
 
 void tearDown(void) {}
@@ -126,6 +152,28 @@ int main(void)
     RUN_TEST(test_thingspeak_send_perform_fail_no_crash);
     RUN_TEST(test_thingspeak_send_init_null_no_crash);
     RUN_TEST(test_thingspeak_url_set_in_request);
+
+    /* telemetry/mqtt */
+    RUN_TEST(test_mqtt_backend_struct_populated);
+    RUN_TEST(test_mqtt_init_returns_ok_when_connected);
+    RUN_TEST(test_mqtt_init_fails_when_client_null);
+    RUN_TEST(test_mqtt_init_fails_when_start_fails);
+    RUN_TEST(test_mqtt_init_fails_when_register_fails);
+    RUN_TEST(test_mqtt_send_publishes_to_correct_topic);
+    RUN_TEST(test_mqtt_send_payload_contains_temperature);
+    RUN_TEST(test_mqtt_send_payload_contains_humidity);
+    RUN_TEST(test_mqtt_send_payload_contains_vpd_fields);
+    RUN_TEST(test_mqtt_send_increments_publish_count);
+    RUN_TEST(test_mqtt_send_skips_when_not_connected);
+    RUN_TEST(test_mqtt_send_skips_after_disconnect);
+    RUN_TEST(test_mqtt_send_handles_publish_failure_no_crash);
+    RUN_TEST(test_mqtt_deinit_idempotent);
+    RUN_TEST(test_mqtt_deinit_clears_connected_state);
+    RUN_TEST(test_mqtt_failure_does_not_block_thingspeak);
+    RUN_TEST(test_thingspeak_failure_does_not_affect_mqtt);
+    RUN_TEST(test_mqtt_unavailable_thingspeak_still_sends);
+    RUN_TEST(test_mqtt_error_tcp_transport_no_crash);
+    RUN_TEST(test_mqtt_error_connection_refused_no_crash);
 
     return UNITY_END();
 }

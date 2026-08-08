@@ -26,6 +26,7 @@
 #include "vpd.h"
 #include "wifi_env.h"
 #include "telemetry_thingspeak.h"
+#include "telemetry_mqtt.h"
 
 static const char *TAG = "maju";
 
@@ -53,7 +54,15 @@ static sht3x_handle_t s_sensor;
 static uint8_t s_sensor_addr = SHT35_ADDR;
 static EventGroupHandle_t s_wifi_event_group;
 static int s_wifi_retries;
-static const telemetry_backend_t *s_telemetry = &thingspeak_backend;
+
+/* MQTT roda na propria task interna; send() e nao-bloqueante (QoS 0).       */
+/* ThingSpeak bloqueia no HTTP; as duas operacoes ocorrem em paralelo porque  */
+/* o MQTT task envia enquanto a task principal aguarda a resposta HTTP.       */
+static const telemetry_backend_t *const s_backends[] = {
+    &mqtt_backend,
+    &thingspeak_backend,
+    NULL,
+};
 
 static void wifi_event_handler(void *arg,
                                esp_event_base_t event_base,
@@ -264,8 +273,21 @@ void app_main(void)
     } else {
         ESP_LOGI(TAG, "ThingSpeak desativado (MAJU_THINGSPEAK_ENABLE=0 no .env).");
     }
+    if (MAJU_MQTT_ENABLE_ENV) {
+        ESP_LOGI(TAG, "MQTT ativo: broker=%s, topico=%s",
+                 MAJU_MQTT_BROKER_URI_ENV, MAJU_MQTT_TOPIC_ENV);
+    } else {
+        ESP_LOGI(TAG, "MQTT desativado (MAJU_MQTT_ENABLE=0 no .env).");
+    }
 
     wifi_init_sta();
+
+    for (int i = 0; s_backends[i] != NULL; i++) {
+        esp_err_t err = s_backends[i]->init();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Backend[%d] falhou na inicializacao: %s", i, esp_err_to_name(err));
+        }
+    }
 
     i2c_bus_init();
     if (sensor_init() != ESP_OK) {
@@ -295,7 +317,9 @@ void app_main(void)
             vpd_result_t v;
             vpd_calculate(t, rh, LEAF_OFFSET_C, &v);
             print_reading(t, rh, &v);
-            s_telemetry->send(t, rh, &v);
+            for (int i = 0; s_backends[i] != NULL; i++) {
+                s_backends[i]->send(t, rh, &v);
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(SAMPLE_INTERVAL_MS));
