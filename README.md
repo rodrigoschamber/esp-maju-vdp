@@ -231,16 +231,19 @@ terminar. Uma falha em qualquer um dos backends **n\u00e3o interrompe o outro**.
 
 ### Formato da mensagem MQTT
 
-```json
-{ "t": 24.83, "rh": 62.14, "vpd_ar": 1.187, "vpd_folha": 0.832 }
+```
+field1=24.83&field2=62.14&field3=1.187&field4=0.832
 ```
 
-| Campo       | Dado              | Unidade |
-| ----------- | ----------------- | ------- |
-| `t`         | Temperatura do ar | \u00b0C |
-| `rh`        | Umidade relativa  | %       |
-| `vpd_ar`    | VPD do ar         | kPa     |
-| `vpd_folha` | VPD da folha      | kPa     |
+Mesmo formato de payload do ThingSpeak (URL-encoded), com precisão de 2 casas
+para temperatura/umidade e 3 casas para VPD.
+
+| Campo    | Dado              | Unidade | Precisão |
+| -------- | ----------------- | ------- | -------- |
+| `field1` | Temperatura do ar | °C      | 2 casas  |
+| `field2` | Umidade relativa  | %       | 2 casas  |
+| `field3` | VPD do ar         | kPa     | 3 casas  |
+| `field4` | VPD da folha      | kPa     | 3 casas  |
 
 ### Vari\u00e1veis de ambiente MQTT
 
