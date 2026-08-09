@@ -17,6 +17,7 @@ SRCS := test_runner.c \
         test_telemetry.c \
         test_thingspeak.c \
         test_mqtt.c \
+        test_dispatch.c \
         i2c_stub.c \
         thingspeak_http_stub.c \
         mqtt_stub.c \
@@ -24,6 +25,7 @@ SRCS := test_runner.c \
         ../../main/hal/sht3x.c \
         ../../main/telemetry/thingspeak/telemetry_thingspeak.c \
         ../../main/telemetry/mqtt/telemetry_mqtt.c \
+        ../../main/telemetry/telemetry_dispatch.c \
         $(UNITY_DIR)/unity.c
 
 TARGET := run_tests

@@ -25,6 +25,7 @@
 #include "sht3x.h"
 #include "vpd.h"
 #include "wifi_env.h"
+#include "telemetry_dispatch.h"
 #include "telemetry_thingspeak.h"
 #include "telemetry_mqtt.h"
 
@@ -279,12 +280,7 @@ void app_main(void)
 
     wifi_init_sta();
 
-    for (int i = 0; s_backends[i] != NULL; i++) {
-        esp_err_t err = s_backends[i]->init();
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Backend[%d] falhou na inicializacao: %s", i, esp_err_to_name(err));
-        }
-    }
+    telemetry_dispatch_init(s_backends);
 
     i2c_bus_init();
     if (sensor_init() != ESP_OK) {
@@ -314,9 +310,7 @@ void app_main(void)
             vpd_result_t v;
             vpd_calculate(t, rh, LEAF_OFFSET_C, &v);
             print_reading(t, rh, &v);
-            for (int i = 0; s_backends[i] != NULL; i++) {
-                s_backends[i]->send(t, rh, &v);
-            }
+            telemetry_dispatch_send(t, rh, &v);
         }
 
         vTaskDelay(pdMS_TO_TICKS(SAMPLE_INTERVAL_MS));

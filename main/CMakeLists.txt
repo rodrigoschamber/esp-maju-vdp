@@ -159,6 +159,7 @@ configure_file(${CMAKE_CURRENT_LIST_DIR}/wifi_env.h.in ${CMAKE_CURRENT_BINARY_DI
 idf_component_register(SRCS "esp_maju_vdp_main.c"
                             "hal/sht3x.c"
                             "domain/vpd.c"
+                            "telemetry/telemetry_dispatch.c"
                             "telemetry/thingspeak/telemetry_thingspeak.c"
                             "telemetry/mqtt/telemetry_mqtt.c"
                        INCLUDE_DIRS "."

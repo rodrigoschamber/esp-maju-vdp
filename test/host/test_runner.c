@@ -61,6 +61,16 @@ void ts_stub_reset(void);
 /* controle do stub MQTT (definido em mqtt_stub.c) */
 void mqtt_stub_reset(void);
 
+/* --- declaracoes dos testes (definidos em test_dispatch.c) ----------------- */
+void test_dispatch_init_calls_each_backend_init(void);
+void test_dispatch_send_routes_to_all_backends(void);
+void test_dispatch_send_delivers_correct_values(void);
+void test_dispatch_send_is_nonblocking_before_process(void);
+void test_dispatch_slow_backend_does_not_prevent_other(void);
+void test_dispatch_multiple_readings_buffered(void);
+void test_dispatch_init_error_continues_other_backends(void);
+void test_dispatch_deinit_resets_state(void);
+
 /* --- declaracoes dos testes (definidos em test_mqtt.c) --------------------- */
 void test_mqtt_backend_struct_populated(void);
 void test_mqtt_init_returns_ok_when_connected(void);
@@ -174,6 +184,16 @@ int main(void)
     RUN_TEST(test_mqtt_unavailable_thingspeak_still_sends);
     RUN_TEST(test_mqtt_error_tcp_transport_no_crash);
     RUN_TEST(test_mqtt_error_connection_refused_no_crash);
+
+    /* telemetry/dispatch */
+    RUN_TEST(test_dispatch_init_calls_each_backend_init);
+    RUN_TEST(test_dispatch_send_routes_to_all_backends);
+    RUN_TEST(test_dispatch_send_delivers_correct_values);
+    RUN_TEST(test_dispatch_send_is_nonblocking_before_process);
+    RUN_TEST(test_dispatch_slow_backend_does_not_prevent_other);
+    RUN_TEST(test_dispatch_multiple_readings_buffered);
+    RUN_TEST(test_dispatch_init_error_continues_other_backends);
+    RUN_TEST(test_dispatch_deinit_resets_state);
 
     return UNITY_END();
 }

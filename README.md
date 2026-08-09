@@ -58,6 +58,7 @@ esp-maju-vdp/
 │   │   ├── vpd.c / vpd.h            # fórmulas de VPD e faixas de referência
 │   ├── telemetry/
 │   │   ├── telemetry.h              # interface genérica telemetry_backend_t
+│   │   ├── telemetry_dispatch.c / .h  # fila + task por backend (isolamento de timing)
 │   │   ├── thingspeak/
 │   │   │   ├── telemetry_thingspeak.c / .h  # backend ThingSpeak (HTTP POST)
 │   │   └── mqtt/
@@ -107,10 +108,12 @@ static const telemetry_backend_t *const s_backends[] = {
 };
 ```
 
-Cada leitura itera o array chamando `send()` em sequência — MQTT retorna
-imediatamente (QoS 0, fire-and-forget) enquanto o ThingSpeak processa em
-parallel via sua task interna. Para adicionar um novo backend, basta incluí-lo
-no array; nenhuma outra parte do código muda.
+`telemetry_dispatch_init()` cria uma fila e uma task FreeRTOS dedicada para
+cada backend. A cada leitura, `telemetry_dispatch_send()` enfileira os dados em
+todas as filas sem bloquear — cada backend processa de forma independente em sua
+própria task. Um backend lento (ThingSpeak com timeout HTTP de 10 s) ou com
+falha não atrasa nem interrompe os demais. Para adicionar um novo backend, basta
+incluí-lo no array; nenhuma outra parte do código muda.
 
 ### HAL — driver de sensor isolado
 
