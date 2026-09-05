@@ -1,25 +1,12 @@
 #include "unity.h"
-#include "mqtt_client.h"
+#include "mqtt_stub.h"
 #include "telemetry_mqtt.h"
 #include "telemetry_thingspeak.h"
-#include "vpd.h"
+#include "test_fixtures.h"
 #include "esp_err.h"
 #include "wifi_env.h"
 #include <string.h>
 #include <stdbool.h>
-
-/* declaradas em mqtt_stub.c */
-extern char mqtt_stub_last_topic[128];
-extern char mqtt_stub_last_payload[256];
-extern int  mqtt_stub_publish_count;
-void mqtt_stub_reset(void);
-void mqtt_stub_set_init_null(bool fail);
-void mqtt_stub_set_start_fail(bool fail);
-void mqtt_stub_set_register_ret(esp_err_t ret);
-void mqtt_stub_set_publish_ret(int ret);
-void mqtt_stub_set_simulate_connect(bool sim);
-void mqtt_stub_fire_disconnected(void);
-void mqtt_stub_fire_event(esp_mqtt_event_id_t id, esp_mqtt_event_t *event);
 
 /* declaradas em thingspeak_http_stub.c */
 extern char ts_stub_last_payload[256];
@@ -35,12 +22,24 @@ static void init_connected(void)
     mqtt_backend.init();
 }
 
-static vpd_result_t make_vpd(void)
+static maju_reading_t make_r(void)
 {
-    vpd_result_t v = {0};
-    v.vpd_ar    = 1.234f;
-    v.vpd_folha = 1.567f;
-    return v;
+    return make_reading(25.0f, 60.0f, 1.234f, 1.567f);
+}
+
+/* Conta quantos valores ha entre "px":[ e ] (numero de virgulas + 1). */
+static int count_px_values(const char *json)
+{
+    const char *p = strstr(json, "\"px\":[");
+    if (!p) return -1;
+    p += 6;
+    const char *end = strchr(p, ']');
+    if (!end) return -1;
+    int n = 1;
+    for (; p < end; p++) {
+        if (*p == ',') n++;
+    }
+    return n;
 }
 
 /* ---- testes: estrutura do backend ---------------------------------------- */
@@ -83,13 +82,13 @@ void test_mqtt_init_fails_when_register_fails(void)
     TEST_ASSERT_EQUAL_INT(ESP_FAIL, mqtt_backend.init());
 }
 
-/* ---- testes: send --------------------------------------------------------- */
+/* ---- testes: send (escalares) -------------------------------------------- */
 
 void test_mqtt_send_publishes_to_correct_topic(void)
 {
     init_connected();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_TOPIC_ENV, mqtt_stub_last_topic);
     mqtt_backend.deinit();
 }
@@ -97,8 +96,8 @@ void test_mqtt_send_publishes_to_correct_topic(void)
 void test_mqtt_send_payload_contains_temperature(void)
 {
     init_connected();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field1=25.00"));
     mqtt_backend.deinit();
 }
@@ -106,8 +105,8 @@ void test_mqtt_send_payload_contains_temperature(void)
 void test_mqtt_send_payload_contains_humidity(void)
 {
     init_connected();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field2=60.00"));
     mqtt_backend.deinit();
 }
@@ -115,8 +114,8 @@ void test_mqtt_send_payload_contains_humidity(void)
 void test_mqtt_send_payload_contains_vpd_fields(void)
 {
     init_connected();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field3=1.234"));
     TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "field4=1.567"));
     mqtt_backend.deinit();
@@ -125,8 +124,8 @@ void test_mqtt_send_payload_contains_vpd_fields(void)
 void test_mqtt_send_increments_publish_count(void)
 {
     init_connected();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_EQUAL_INT(1, mqtt_stub_publish_count);
     mqtt_backend.deinit();
 }
@@ -138,8 +137,8 @@ void test_mqtt_send_skips_when_not_connected(void)
     mqtt_stub_set_simulate_connect(false);
     mqtt_backend.init();
 
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_EQUAL_INT(0, mqtt_stub_publish_count);
     mqtt_backend.deinit();
 }
@@ -149,8 +148,8 @@ void test_mqtt_send_skips_after_disconnect(void)
     init_connected();
     mqtt_stub_fire_disconnected(); /* simula perda de conexao */
 
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_EQUAL_INT(0, mqtt_stub_publish_count);
     mqtt_backend.deinit();
 }
@@ -159,12 +158,103 @@ void test_mqtt_send_handles_publish_failure_no_crash(void)
 {
     init_connected();
     mqtt_stub_set_publish_ret(-1); /* simula falha de publicacao */
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     /* nao deve travar; publish_count ainda incrementa (a funcao foi chamada) */
     TEST_ASSERT_EQUAL_INT(1, mqtt_stub_publish_count);
     mqtt_backend.deinit();
 }
+
+/* ---- testes: send (campos IR e fonte) ------------------------------------ */
+
+void test_mqtt_send_payload_contains_ir_fields(void)
+{
+    init_connected();
+    maju_reading_t r = make_reading_ir();
+    mqtt_backend.send(&r);
+    /* Com AMG valido ha duas publicacoes; a primeira e a dos escalares. */
+    TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_TOPIC_ENV, mqtt_stub_pubs[0].topic);
+    TEST_ASSERT_EQUAL_STRING(
+        "field1=25.00&field2=60.00&field3=1.234&field4=1.567"
+        "&field5=22.83&field6=21.10&field7=23.00&field8=24.90&src=mlx",
+        mqtt_stub_pubs[0].payload);
+    mqtt_backend.deinit();
+}
+
+void test_mqtt_send_payload_src_none_without_ir(void)
+{
+    init_connected();
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_last_payload, "&src=none"));
+    mqtt_backend.deinit();
+}
+
+void test_mqtt_send_payload_src_amg_on_fallback(void)
+{
+    init_connected();
+    maju_reading_t r = make_reading_ir();
+    r.th.mlx_ok = false;
+    thermal_select_leaf(&r.th);
+    r.v.t_folha_c = r.th.t_folha_c;
+    mqtt_backend.send(&r);
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_pubs[0].payload, "field5=23.00"));
+    TEST_ASSERT_NOT_NULL(strstr(mqtt_stub_pubs[0].payload, "&src=amg"));
+    mqtt_backend.deinit();
+}
+
+/* ---- testes: frame termico ------------------------------------------------ */
+
+void test_mqtt_send_no_thermal_frame_when_amg_fail(void)
+{
+    init_connected();
+    maju_reading_t r = make_reading_ir();
+    r.th.amg_ok = false;
+    mqtt_backend.send(&r);
+    TEST_ASSERT_EQUAL_INT(1, mqtt_stub_publish_count);
+    TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_TOPIC_ENV, mqtt_stub_last_topic);
+    mqtt_backend.deinit();
+}
+
+void test_mqtt_send_publishes_thermal_frame_on_separate_topic(void)
+{
+    init_connected();
+    maju_reading_t r = make_reading_ir();
+    mqtt_backend.send(&r);
+
+    TEST_ASSERT_EQUAL_INT(2, mqtt_stub_publish_count);
+    TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_THERMAL_TOPIC_ENV, mqtt_stub_last_topic);
+    TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_THERMAL_TOPIC_ENV, mqtt_stub_pubs[1].topic);
+
+    const char *json = mqtt_stub_last_payload;
+    TEST_ASSERT_EQUAL_CHAR('{', json[0]);
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"ts_ms\":123456"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"src\":\"mlx\""));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"t_leaf\":22.83"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"mlx_tobj\":22.83"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"mlx_ta\":24.90"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"therm\":25.10"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"min\":21.10"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"avg\":23.00"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"max\":24.90"));
+    TEST_ASSERT_EQUAL_INT(64, count_px_values(json));
+    TEST_ASSERT_EQUAL_CHAR('}', json[strlen(json) - 1]);
+    mqtt_backend.deinit();
+}
+
+void test_mqtt_thermal_frame_skipped_when_not_connected(void)
+{
+    mqtt_stub_reset();
+    mqtt_stub_set_simulate_connect(false);
+    mqtt_backend.init();
+
+    maju_reading_t r = make_reading_ir();
+    mqtt_backend.send(&r);
+    TEST_ASSERT_EQUAL_INT(0, mqtt_stub_publish_count);
+    mqtt_backend.deinit();
+}
+
+/* ---- testes: eventos de erro ---------------------------------------------- */
 
 void test_mqtt_error_tcp_transport_no_crash(void)
 {
@@ -222,8 +312,8 @@ void test_mqtt_deinit_clears_connected_state(void)
 
     /* Apos deinit, send deve ser ignorado. */
     mqtt_stub_reset();
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);
     TEST_ASSERT_EQUAL_INT(0, mqtt_stub_publish_count);
 }
 
@@ -237,9 +327,9 @@ void test_mqtt_failure_does_not_block_thingspeak(void)
     ts_stub_set_response(200, ESP_OK, "99");
     ts_stub_last_payload[0] = '\0';
 
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);       /* MQTT: falha na publicacao  */
-    thingspeak_backend.send(25.0f, 60.0f, &v); /* ThingSpeak: deve funcionar */
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);       /* MQTT: falha na publicacao  */
+    thingspeak_backend.send(&r); /* ThingSpeak: deve funcionar */
 
     TEST_ASSERT_NOT_NULL(strstr(ts_stub_last_payload, "field1=25.00"));
     mqtt_backend.deinit();
@@ -251,9 +341,9 @@ void test_thingspeak_failure_does_not_affect_mqtt(void)
     init_connected();
     ts_stub_set_response(500, ESP_OK, "error");
 
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);       /* MQTT: publica              */
-    thingspeak_backend.send(25.0f, 60.0f, &v); /* ThingSpeak: retorna 500    */
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);       /* MQTT: publica              */
+    thingspeak_backend.send(&r); /* ThingSpeak: retorna 500    */
 
     TEST_ASSERT_EQUAL_INT(1, mqtt_stub_publish_count);
     TEST_ASSERT_EQUAL_STRING(MAJU_MQTT_TOPIC_ENV, mqtt_stub_last_topic);
@@ -268,9 +358,9 @@ void test_mqtt_unavailable_thingspeak_still_sends(void)
     mqtt_backend.init();
     ts_stub_set_response(200, ESP_OK, "7");
 
-    vpd_result_t v = make_vpd();
-    mqtt_backend.send(25.0f, 60.0f, &v);       /* descartado: nao conectado  */
-    thingspeak_backend.send(25.0f, 60.0f, &v); /* deve enviar normalmente    */
+    maju_reading_t r = make_r();
+    mqtt_backend.send(&r);       /* descartado: nao conectado  */
+    thingspeak_backend.send(&r); /* deve enviar normalmente    */
 
     TEST_ASSERT_EQUAL_INT(0, mqtt_stub_publish_count);
     TEST_ASSERT_NOT_NULL(strstr(ts_stub_last_payload, "api_key="));

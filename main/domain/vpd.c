@@ -9,15 +9,20 @@ float vpd_svp_kpa(float temperature_c)
     return 0.6108f * expf((17.27f * temperature_c) / (temperature_c + 237.3f));
 }
 
-void vpd_calculate(float temperature_c, float humidity_rh, float leaf_offset_c, vpd_result_t *out)
+void vpd_calculate_leaf(float temperature_c, float humidity_rh, float t_folha_c, vpd_result_t *out)
 {
     out->svp_ar    = vpd_svp_kpa(temperature_c);
     out->avp       = out->svp_ar * (humidity_rh / 100.0f);
     out->vpd_ar    = out->svp_ar - out->avp;
 
-    out->t_folha_c = temperature_c - leaf_offset_c;
+    out->t_folha_c = t_folha_c;
     out->svp_folha = vpd_svp_kpa(out->t_folha_c);
     out->vpd_folha = out->svp_folha - out->avp;
+}
+
+void vpd_calculate(float temperature_c, float humidity_rh, float leaf_offset_c, vpd_result_t *out)
+{
+    vpd_calculate_leaf(temperature_c, humidity_rh, temperature_c - leaf_offset_c, out);
 }
 
 vpd_faixa_t vpd_classificar(float vpd_kpa)

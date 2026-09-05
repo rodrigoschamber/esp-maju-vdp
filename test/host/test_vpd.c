@@ -72,6 +72,43 @@ void test_vpd_calculate_avp_field(void)
     TEST_ASSERT_FLOAT_WITHIN(0.001f, expected_avp, v.avp);
 }
 
+/* --- vpd_calculate_leaf ---------------------------------------------------- */
+
+void test_vpd_calculate_leaf_typical(void)
+{
+    /* Mesmos numeros do caso tipico, mas com T_folha medida = 23 C. */
+    vpd_result_t v;
+    vpd_calculate_leaf(25.0f, 60.0f, 23.0f, &v);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.005f, 3.169f, v.svp_ar);
+    TEST_ASSERT_FLOAT_WITHIN(0.005f, 1.268f, v.vpd_ar);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 23.0f,  v.t_folha_c);
+    TEST_ASSERT_FLOAT_WITHIN(0.005f, 2.809f, v.svp_folha);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f,  0.908f, v.vpd_folha);
+}
+
+void test_vpd_calculate_leaf_equals_air(void)
+{
+    /* Folha na temperatura do ar: vpd_folha == vpd_ar. */
+    vpd_result_t v;
+    vpd_calculate_leaf(25.0f, 50.0f, 25.0f, &v);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, v.vpd_ar, v.vpd_folha);
+}
+
+void test_vpd_calculate_wrapper_matches_leaf(void)
+{
+    /* vpd_calculate(t, rh, off) deve ser identico a vpd_calculate_leaf(t, rh, t - off). */
+    vpd_result_t a, b;
+    vpd_calculate(28.0f, 65.0f, 1.5f, &a);
+    vpd_calculate_leaf(28.0f, 65.0f, 26.5f, &b);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, b.t_folha_c, a.t_folha_c);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, b.svp_folha, a.svp_folha);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, b.vpd_folha, a.vpd_folha);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, b.vpd_ar,    a.vpd_ar);
+}
+
 /* --- vpd_classificar ------------------------------------------------------- */
 
 void test_vpd_classificar_baixa(void)

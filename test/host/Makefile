@@ -13,8 +13,12 @@ CFLAGS := -std=c11 -Wall -Wextra -g \
 
 SRCS := test_runner.c \
         test_vpd.c \
+        test_thermal.c \
         test_sht3x.c \
+        test_mlx90614.c \
+        test_amg8833.c \
         test_telemetry.c \
+        test_fields.c \
         test_thingspeak.c \
         test_mqtt.c \
         test_dispatch.c \
@@ -22,10 +26,14 @@ SRCS := test_runner.c \
         thingspeak_http_stub.c \
         mqtt_stub.c \
         ../../main/domain/vpd.c \
+        ../../main/domain/thermal.c \
         ../../main/hal/sht3x.c \
+        ../../main/hal/mlx90614.c \
+        ../../main/hal/amg8833.c \
         ../../main/telemetry/thingspeak/telemetry_thingspeak.c \
         ../../main/telemetry/mqtt/telemetry_mqtt.c \
         ../../main/telemetry/telemetry_dispatch.c \
+        ../../main/telemetry/telemetry_fields.c \
         $(UNITY_DIR)/unity.c
 
 TARGET := run_tests

@@ -15,11 +15,8 @@ static const char *TAG = "dispatch";
 #define DISPATCH_TASK_PRIORITY (tskIDLE_PRIORITY + 2)
 #define DISPATCH_MAX_BACKENDS  8
 
-typedef struct {
-    float        t;
-    float        rh;
-    vpd_result_t v;
-} dispatch_msg_t;
+/* Item da fila: copia completa da leitura (inclui o frame termico de 64 pixels). */
+typedef maju_reading_t dispatch_msg_t;
 
 typedef struct {
     const telemetry_backend_t *backend;
@@ -36,7 +33,7 @@ static void backend_task(void *arg)
     dispatch_msg_t  msg;
     for (;;) {
         if (xQueueReceive(slot->queue, &msg, portMAX_DELAY) == pdTRUE) {
-            slot->backend->send(msg.t, msg.rh, &msg.v);
+            slot->backend->send(&msg);
         }
     }
 }
@@ -72,11 +69,13 @@ esp_err_t telemetry_dispatch_init(const telemetry_backend_t *const *backends)
     return ESP_OK;
 }
 
-void telemetry_dispatch_send(float t, float rh, const vpd_result_t *v)
+void telemetry_dispatch_send(const maju_reading_t *r)
 {
-    dispatch_msg_t msg = {.t = t, .rh = rh, .v = *v};
+    if (r == NULL) {
+        return;
+    }
     for (int i = 0; i < s_count; i++) {
-        if (xQueueSend(s_slots[i].queue, &msg, 0) != pdTRUE) {
+        if (xQueueSend(s_slots[i].queue, r, 0) != pdTRUE) {
             ESP_LOGW(TAG, "Fila do backend[%d] cheia; leitura descartada.", i);
         }
     }
@@ -87,7 +86,7 @@ void telemetry_dispatch_process_pending(void)
     dispatch_msg_t msg;
     for (int i = 0; i < s_count; i++) {
         while (xQueueReceive(s_slots[i].queue, &msg, 0) == pdTRUE) {
-            s_slots[i].backend->send(msg.t, msg.rh, &msg.v);
+            s_slots[i].backend->send(&msg);
         }
     }
 }

@@ -1,4 +1,4 @@
-#include "mqtt_client.h"
+#include "mqtt_stub.h"
 #include <string.h>
 #include <stdbool.h>
 
@@ -12,8 +12,9 @@ static bool               s_simulate_connect = true;  /* start() dispara CONNECT
 
 /* ---- estado observavel pelos testes --------------------------------------- */
 
+mqtt_stub_pub_t mqtt_stub_pubs[MQTT_STUB_MAX_PUBS];
 char mqtt_stub_last_topic[128];
-char mqtt_stub_last_payload[256];
+char mqtt_stub_last_payload[1024];
 int  mqtt_stub_publish_count;
 
 /* ---- estado interno do stub ----------------------------------------------- */
@@ -38,6 +39,7 @@ void mqtt_stub_reset(void)
     s_simulate_connect     = true;
     s_handler              = NULL;
     s_handler_arg          = NULL;
+    memset(mqtt_stub_pubs, 0, sizeof(mqtt_stub_pubs));
     mqtt_stub_last_topic[0]   = '\0';
     mqtt_stub_last_payload[0] = '\0';
     mqtt_stub_publish_count   = 0;
@@ -118,15 +120,21 @@ int esp_mqtt_client_publish(esp_mqtt_client_handle_t client,
     (void)qos;
     (void)retain;
 
-    strncpy(mqtt_stub_last_topic, topic ? topic : "", sizeof(mqtt_stub_last_topic) - 1);
-    mqtt_stub_last_topic[sizeof(mqtt_stub_last_topic) - 1] = '\0';
+    mqtt_stub_pub_t *pub = &mqtt_stub_pubs[mqtt_stub_publish_count % MQTT_STUB_MAX_PUBS];
 
-    int copy = (len > 0 && len < (int)sizeof(mqtt_stub_last_payload) - 1)
-               ? len : (int)sizeof(mqtt_stub_last_payload) - 1;
+    strncpy(pub->topic, topic ? topic : "", sizeof(pub->topic) - 1);
+    pub->topic[sizeof(pub->topic) - 1] = '\0';
+
+    int copy = (len > 0 && len < (int)sizeof(pub->payload) - 1)
+               ? len : (int)sizeof(pub->payload) - 1;
     if (data && copy > 0) {
-        memcpy(mqtt_stub_last_payload, data, copy);
+        memcpy(pub->payload, data, copy);
     }
-    mqtt_stub_last_payload[copy] = '\0';
+    pub->payload[copy] = '\0';
+    pub->len = len;
+
+    memcpy(mqtt_stub_last_topic, pub->topic, sizeof(mqtt_stub_last_topic));
+    memcpy(mqtt_stub_last_payload, pub->payload, sizeof(mqtt_stub_last_payload));
 
     mqtt_stub_publish_count++;
     return s_publish_ret;

@@ -1,6 +1,6 @@
 #include "unity.h"
 #include "telemetry.h"
-#include "vpd.h"
+#include "test_fixtures.h"
 #include <stdbool.h>
 
 /* --- backends mock --------------------------------------------------------- */
@@ -18,12 +18,11 @@ static esp_err_t mock_init(void)
     return s_init_ret;
 }
 
-static void mock_send(float t, float rh, const vpd_result_t *v)
+static void mock_send(const maju_reading_t *r)
 {
-    (void)v;
     s_send_called = true;
-    s_last_t  = t;
-    s_last_rh = rh;
+    s_last_t  = r->t_ar;
+    s_last_rh = r->rh;
 }
 
 static void mock_deinit(void)
@@ -41,9 +40,9 @@ static const telemetry_backend_t s_mock = {
 static bool s_alt_send_called;
 
 static esp_err_t alt_init(void) { return ESP_OK; }
-static void alt_send(float t, float rh, const vpd_result_t *v)
+static void alt_send(const maju_reading_t *r)
 {
-    (void)t; (void)rh; (void)v;
+    (void)r;
     s_alt_send_called = true;
 }
 static void alt_deinit(void) {}
@@ -75,8 +74,8 @@ void test_telemetry_init_propagates_error(void)
 void test_telemetry_send_dispatches(void)
 {
     s_send_called = false;
-    vpd_result_t v = {0};
-    s_mock.send(24.5f, 63.0f, &v);
+    maju_reading_t r = make_reading(24.5f, 63.0f, 0.0f, 0.0f);
+    s_mock.send(&r);
     TEST_ASSERT_TRUE(s_send_called);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 24.5f, s_last_t);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 63.0f, s_last_rh);
@@ -94,17 +93,17 @@ void test_telemetry_swap_backend(void)
     /* Primeira chamada: backend mock. */
     s_send_called     = false;
     s_alt_send_called = false;
-    vpd_result_t v = {0};
+    maju_reading_t r = make_reading(1.0f, 2.0f, 0.0f, 0.0f);
 
     const telemetry_backend_t *b = &s_mock;
-    b->send(1.0f, 2.0f, &v);
+    b->send(&r);
     TEST_ASSERT_TRUE(s_send_called);
     TEST_ASSERT_FALSE(s_alt_send_called);
 
     /* Troca de backend: apenas alterar o ponteiro, sem tocar no restante. */
     s_send_called = false;
     b = &s_alt;
-    b->send(1.0f, 2.0f, &v);
+    b->send(&r);
     TEST_ASSERT_FALSE(s_send_called);
     TEST_ASSERT_TRUE(s_alt_send_called);
 }

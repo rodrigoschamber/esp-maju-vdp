@@ -15,7 +15,10 @@ menu "Sensor VPD - Configuracao"
     config MAJU_I2C_FREQ_HZ
         int "Frequencia do barramento I2C (Hz)"
         default 100000
-        range 10000 1000000
+        range 10000 100000
+        help
+            O MLX90614 e um dispositivo SMBus e limita o barramento a 100 kHz.
+            Todos os sensores (SHT35, MLX90614, AMG8833) compartilham este barramento.
 
     config MAJU_SHT35_ADDR_0X45
         bool "SHT35 no endereco 0x45 (pino ADDR em VDD)"
@@ -23,6 +26,20 @@ menu "Sensor VPD - Configuracao"
         help
             Por padrao o pino ADDR fica em GND e o endereco e 0x44.
             Marque esta opcao apenas se o seu breakout fixa ADDR em VDD.
+
+    config MAJU_AMG8833_ADDR_0X68
+        bool "AMG8833 no endereco 0x68 (AD_SELECT em GND)"
+        default n
+        help
+            Por padrao o AD_SELECT fica em VDD e o endereco e 0x69 (breakouts Adafruit/GY).
+            Marque apenas se o seu modulo fixa AD_SELECT em GND.
+            O MLX90614 usa o endereco fixo 0x5A.
+
+    config MAJU_PRINT_THERMAL_MAP
+        bool "Imprimir o mapa 8x8 do AMG8833 no monitor serial"
+        default y
+        help
+            Mostra a matriz termica (graus Celsius) a cada leitura, abaixo da tabela.
 
     config MAJU_SAMPLE_INTERVAL_MS
         int "Intervalo entre leituras (ms)"

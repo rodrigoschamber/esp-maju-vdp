@@ -16,8 +16,8 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 
-#include "vpd.h"
 #include "wifi_env.h"
+#include "telemetry_fields.h"
 #include "telemetry_thingspeak.h"
 
 static const char *TAG = "thingspeak";
@@ -46,25 +46,25 @@ static esp_err_t ts_init(void)
     return ESP_OK;
 }
 
-static void ts_send(float t, float rh, const vpd_result_t *v)
+static void ts_send(const maju_reading_t *r)
 {
-    if (!MAJU_THINGSPEAK_ENABLE_ENV) {
+    if (!MAJU_THINGSPEAK_ENABLE_ENV || r == NULL) {
         return;
     }
 
-    char payload[192];
-    int len = snprintf(payload,
-                       sizeof(payload),
-                       "api_key=%s&field1=%.2f&field2=%.2f&field3=%.3f&field4=%.3f",
-                       MAJU_THINGSPEAK_WRITE_API_KEY_ENV,
-                       t,
-                       rh,
-                       v->vpd_ar,
-                       v->vpd_folha);
+    char payload[256];
+    int len = snprintf(payload, sizeof(payload), "api_key=%s&", MAJU_THINGSPEAK_WRITE_API_KEY_ENV);
     if (len <= 0 || len >= (int)sizeof(payload)) {
         ESP_LOGE(TAG, "Payload ThingSpeak excedeu o limite do buffer.");
         return;
     }
+
+    int fields_len = telemetry_format_fields(payload + len, sizeof(payload) - (size_t)len, r);
+    if (fields_len < 0) {
+        ESP_LOGE(TAG, "Payload ThingSpeak excedeu o limite do buffer.");
+        return;
+    }
+    len += fields_len;
 
     s_resp_buf[0] = '\0';
     s_resp_len    = 0;

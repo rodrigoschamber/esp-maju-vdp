@@ -22,7 +22,7 @@ typedef struct {
     float svp_ar;       /*!< Pressao de saturacao de vapor no ar (kPa) */
     float avp;          /*!< Pressao atual de vapor (kPa) */
     float vpd_ar;       /*!< VPD do ar (kPa) */
-    float t_folha_c;    /*!< Temperatura estimada da folha (°C) */
+    float t_folha_c;    /*!< Temperatura da folha usada no calculo (°C), medida ou estimada */
     float svp_folha;    /*!< Pressao de saturacao a temperatura da folha (kPa) */
     float vpd_folha;    /*!< VPD da folha (kPa) */
 } vpd_result_t;
@@ -38,7 +38,19 @@ typedef struct {
 float vpd_svp_kpa(float temperature_c);
 
 /**
- * @brief Calcula VPD do ar e VPD da folha.
+ * @brief Calcula VPD do ar e VPD da folha com a temperatura da folha medida.
+ *
+ * @param temperature_c    Temperatura do ar em °C.
+ * @param humidity_rh      Umidade relativa em % (0-100).
+ * @param t_folha_c        Temperatura da folha em °C (ex.: sensor infravermelho).
+ * @param[out] out         Resultado do calculo.
+ */
+void vpd_calculate_leaf(float temperature_c, float humidity_rh, float t_folha_c, vpd_result_t *out);
+
+/**
+ * @brief Calcula VPD do ar e VPD da folha estimando T_folha = T_ar - offset.
+ *
+ * Atalho para vpd_calculate_leaf(); util quando nao ha sensor de folha.
  *
  * @param temperature_c    Temperatura do ar em °C.
  * @param humidity_rh      Umidade relativa em % (0-100).

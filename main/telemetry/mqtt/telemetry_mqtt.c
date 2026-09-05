@@ -15,14 +15,18 @@
 #include "mqtt_client.h"
 #include "esp_crt_bundle.h"
 
-#include "vpd.h"
 #include "wifi_env.h"
+#include "telemetry_fields.h"
 #include "telemetry_mqtt.h"
 
 static const char *TAG = "mqtt";
 
 static esp_mqtt_client_handle_t s_client;
 static volatile bool            s_connected;
+
+/* JSON do frame termico (~600 bytes); estatico para nao pesar na stack da task.
+ * mqtt_send() so roda na task do dispatcher deste backend, entao nao ha concorrencia. */
+static char s_thermal_json[768];
 
 static void mqtt_event_handler(void *arg,
                                esp_event_base_t event_base,
@@ -118,14 +122,36 @@ static esp_err_t mqtt_init(void)
         return err;
     }
 
-    ESP_LOGI(TAG, "MQTT iniciado: broker=%s, topico=%s",
-             MAJU_MQTT_BROKER_URI_ENV, MAJU_MQTT_TOPIC_ENV);
+    ESP_LOGI(TAG, "MQTT iniciado: broker=%s, topico=%s, termico=%s",
+             MAJU_MQTT_BROKER_URI_ENV, MAJU_MQTT_TOPIC_ENV, MAJU_MQTT_THERMAL_TOPIC_ENV);
     return ESP_OK;
 }
 
-static void mqtt_send(float t, float rh, const vpd_result_t *v)
+/* Publica o frame 8x8 do AMG8833 em JSON no topico termico (so quando o frame e valido). */
+static void mqtt_send_thermal(const maju_reading_t *r)
 {
-    if (!MAJU_MQTT_ENABLE_ENV) {
+    if (!r->th.amg_ok) {
+        return;
+    }
+
+    int len = telemetry_format_thermal_json(s_thermal_json, sizeof(s_thermal_json), r);
+    if (len < 0) {
+        ESP_LOGE(TAG, "JSON do frame termico excedeu o limite do buffer.");
+        return;
+    }
+
+    int msg_id = esp_mqtt_client_publish(s_client, MAJU_MQTT_THERMAL_TOPIC_ENV,
+                                         s_thermal_json, len, 0, 0);
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "Falha ao publicar frame termico MQTT (msg_id=%d).", msg_id);
+    } else {
+        ESP_LOGI(TAG, "MQTT publicado: topico=%s (%d px)", MAJU_MQTT_THERMAL_TOPIC_ENV, THERMAL_PIXELS);
+    }
+}
+
+static void mqtt_send(const maju_reading_t *r)
+{
+    if (!MAJU_MQTT_ENABLE_ENV || r == NULL) {
         return;
     }
 
@@ -134,14 +160,20 @@ static void mqtt_send(float t, float rh, const vpd_result_t *v)
         return;
     }
 
-    char payload[128];
-    int len = snprintf(payload, sizeof(payload),
-                       "field1=%.2f&field2=%.2f&field3=%.3f&field4=%.3f",
-                       t, rh, v->vpd_ar, v->vpd_folha);
-    if (len <= 0 || len >= (int)sizeof(payload)) {
+    char payload[192];
+    int len = telemetry_format_fields(payload, sizeof(payload), r);
+    if (len < 0) {
         ESP_LOGE(TAG, "Payload MQTT excedeu o limite do buffer.");
         return;
     }
+
+    int n = snprintf(payload + len, sizeof(payload) - (size_t)len, "&src=%s",
+                     thermal_source_str(r->th.fonte));
+    if (n <= 0 || n >= (int)(sizeof(payload) - (size_t)len)) {
+        ESP_LOGE(TAG, "Payload MQTT excedeu o limite do buffer.");
+        return;
+    }
+    len += n;
 
     /* QoS 0: fire-and-forget; nao bloqueia enquanto o ThingSpeak processa. */
     int msg_id = esp_mqtt_client_publish(s_client, MAJU_MQTT_TOPIC_ENV,
@@ -151,6 +183,8 @@ static void mqtt_send(float t, float rh, const vpd_result_t *v)
     } else {
         ESP_LOGI(TAG, "MQTT publicado: topico=%s", MAJU_MQTT_TOPIC_ENV);
     }
+
+    mqtt_send_thermal(r);
 }
 
 static void mqtt_deinit(void)

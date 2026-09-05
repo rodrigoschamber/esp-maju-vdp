@@ -3,7 +3,7 @@ if(NOT EXISTS "${MAJU_ENV_FILE}")
      message(FATAL_ERROR "Arquivo .env nao encontrado em ${MAJU_ENV_FILE}. Copie .env.example para .env e preencha as variaveis obrigatorias.")
 endif()
 
-file(STRINGS "${MAJU_ENV_FILE}" MAJU_ENV_LINES REGEX "^MAJU_(WIFI_(SSID|PASSWORD)|LEAF_OFFSET_C|THINGSPEAK_(ENABLE|WRITE_API_KEY|URL)|MQTT_(ENABLE|BROKER_URI|USERNAME|PASSWORD|TOPIC|CLIENT_ID))=")
+file(STRINGS "${MAJU_ENV_FILE}" MAJU_ENV_LINES REGEX "^MAJU_(WIFI_(SSID|PASSWORD)|LEAF_OFFSET_C|THINGSPEAK_(ENABLE|WRITE_API_KEY|URL)|MQTT_(ENABLE|BROKER_URI|USERNAME|PASSWORD|TOPIC|THERMAL_TOPIC|CLIENT_ID))=")
 
 foreach(line IN LISTS MAJU_ENV_LINES)
      if(line MATCHES "^MAJU_WIFI_SSID=(.*)$")
@@ -39,6 +39,9 @@ foreach(line IN LISTS MAJU_ENV_LINES)
      if(line MATCHES "^MAJU_MQTT_TOPIC=(.*)$")
           set(MAJU_MQTT_TOPIC_ENV "${CMAKE_MATCH_1}")
      endif()
+     if(line MATCHES "^MAJU_MQTT_THERMAL_TOPIC=(.*)$")
+          set(MAJU_MQTT_THERMAL_TOPIC_ENV "${CMAKE_MATCH_1}")
+     endif()
      if(line MATCHES "^MAJU_MQTT_CLIENT_ID=(.*)$")
           set(MAJU_MQTT_CLIENT_ID_ENV "${CMAKE_MATCH_1}")
      endif()
@@ -52,8 +55,9 @@ if(NOT DEFINED MAJU_WIFI_PASSWORD_ENV)
      set(MAJU_WIFI_PASSWORD_ENV "")
 endif()
 
-if(NOT DEFINED MAJU_LEAF_OFFSET_C_ENV)
-     set(MAJU_LEAF_OFFSET_C_ENV "")
+# MAJU_LEAF_OFFSET_C ficou obsoleto: a temperatura da folha e medida pelo MLX90614/AMG8833.
+if(DEFINED MAJU_LEAF_OFFSET_C_ENV)
+     message(WARNING "MAJU_LEAF_OFFSET_C esta obsoleto e e ignorado: a temperatura da folha agora vem do MLX90614 (fallback AMG8833). Remova a linha do .env.")
 endif()
 
 if(NOT DEFINED MAJU_THINGSPEAK_ENABLE_ENV)
@@ -83,13 +87,15 @@ endif()
 if(NOT DEFINED MAJU_MQTT_TOPIC_ENV)
      set(MAJU_MQTT_TOPIC_ENV "maju/vpd")
 endif()
+if(NOT DEFINED MAJU_MQTT_THERMAL_TOPIC_ENV)
+     set(MAJU_MQTT_THERMAL_TOPIC_ENV "maju/thermal")
+endif()
 if(NOT DEFINED MAJU_MQTT_CLIENT_ID_ENV)
      set(MAJU_MQTT_CLIENT_ID_ENV "maju_vpd")
 endif()
 
 string(STRIP "${MAJU_WIFI_SSID_ENV}" MAJU_WIFI_SSID_ENV)
 string(STRIP "${MAJU_WIFI_PASSWORD_ENV}" MAJU_WIFI_PASSWORD_ENV)
-string(STRIP "${MAJU_LEAF_OFFSET_C_ENV}" MAJU_LEAF_OFFSET_C_ENV)
 string(STRIP "${MAJU_THINGSPEAK_ENABLE_ENV}" MAJU_THINGSPEAK_ENABLE_ENV)
 string(STRIP "${MAJU_THINGSPEAK_WRITE_API_KEY_ENV}" MAJU_THINGSPEAK_WRITE_API_KEY_ENV)
 string(STRIP "${MAJU_THINGSPEAK_URL_ENV}" MAJU_THINGSPEAK_URL_ENV)
@@ -98,10 +104,10 @@ string(STRIP "${MAJU_MQTT_BROKER_URI_ENV}" MAJU_MQTT_BROKER_URI_ENV)
 string(STRIP "${MAJU_MQTT_USERNAME_ENV}" MAJU_MQTT_USERNAME_ENV)
 string(STRIP "${MAJU_MQTT_PASSWORD_ENV}" MAJU_MQTT_PASSWORD_ENV)
 string(STRIP "${MAJU_MQTT_TOPIC_ENV}" MAJU_MQTT_TOPIC_ENV)
+string(STRIP "${MAJU_MQTT_THERMAL_TOPIC_ENV}" MAJU_MQTT_THERMAL_TOPIC_ENV)
 string(STRIP "${MAJU_MQTT_CLIENT_ID_ENV}" MAJU_MQTT_CLIENT_ID_ENV)
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_WIFI_SSID_ENV "${MAJU_WIFI_SSID_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_WIFI_PASSWORD_ENV "${MAJU_WIFI_PASSWORD_ENV}")
-string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_LEAF_OFFSET_C_ENV "${MAJU_LEAF_OFFSET_C_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_THINGSPEAK_ENABLE_ENV "${MAJU_THINGSPEAK_ENABLE_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_THINGSPEAK_WRITE_API_KEY_ENV "${MAJU_THINGSPEAK_WRITE_API_KEY_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_THINGSPEAK_URL_ENV "${MAJU_THINGSPEAK_URL_ENV}")
@@ -110,14 +116,11 @@ string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_BROKER_URI_ENV "${MAJU_MQTT_BR
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_USERNAME_ENV "${MAJU_MQTT_USERNAME_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_PASSWORD_ENV "${MAJU_MQTT_PASSWORD_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_TOPIC_ENV "${MAJU_MQTT_TOPIC_ENV}")
+string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_THERMAL_TOPIC_ENV "${MAJU_MQTT_THERMAL_TOPIC_ENV}")
 string(REGEX REPLACE "^\"(.*)\"$" "\\1" MAJU_MQTT_CLIENT_ID_ENV "${MAJU_MQTT_CLIENT_ID_ENV}")
 
-if("${MAJU_WIFI_SSID_ENV}" STREQUAL "" OR "${MAJU_WIFI_PASSWORD_ENV}" STREQUAL "" OR "${MAJU_LEAF_OFFSET_C_ENV}" STREQUAL "")
-     message(FATAL_ERROR "MAJU_WIFI_SSID, MAJU_WIFI_PASSWORD e MAJU_LEAF_OFFSET_C devem estar definidos no .env.")
-endif()
-
-if(NOT MAJU_LEAF_OFFSET_C_ENV MATCHES "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$")
-     message(FATAL_ERROR "MAJU_LEAF_OFFSET_C invalido no .env. Use formato numerico com sinal opcional, por exemplo: +2.0, -1.5, 0.0")
+if("${MAJU_WIFI_SSID_ENV}" STREQUAL "" OR "${MAJU_WIFI_PASSWORD_ENV}" STREQUAL "")
+     message(FATAL_ERROR "MAJU_WIFI_SSID e MAJU_WIFI_PASSWORD devem estar definidos no .env.")
 endif()
 
 string(TOLOWER "${MAJU_THINGSPEAK_ENABLE_ENV}" MAJU_THINGSPEAK_ENABLE_NORMALIZED)
@@ -152,14 +155,24 @@ if(MAJU_MQTT_ENABLE_LITERAL EQUAL 1 AND "${MAJU_MQTT_TOPIC_ENV}" STREQUAL "")
      message(FATAL_ERROR "MAJU_MQTT_ENABLE esta ativo, mas MAJU_MQTT_TOPIC esta vazio no .env.")
 endif()
 
-set(MAJU_LEAF_OFFSET_C_LITERAL "${MAJU_LEAF_OFFSET_C_ENV}f")
+if(MAJU_MQTT_ENABLE_LITERAL EQUAL 1 AND "${MAJU_MQTT_THERMAL_TOPIC_ENV}" STREQUAL "")
+     message(FATAL_ERROR "MAJU_MQTT_ENABLE esta ativo, mas MAJU_MQTT_THERMAL_TOPIC esta vazio no .env.")
+endif()
+
+if(MAJU_MQTT_ENABLE_LITERAL EQUAL 1 AND "${MAJU_MQTT_THERMAL_TOPIC_ENV}" STREQUAL "${MAJU_MQTT_TOPIC_ENV}")
+     message(FATAL_ERROR "MAJU_MQTT_THERMAL_TOPIC deve ser diferente de MAJU_MQTT_TOPIC no .env.")
+endif()
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/wifi_env.h.in ${CMAKE_CURRENT_BINARY_DIR}/wifi_env.h @ONLY)
 
 idf_component_register(SRCS "esp_maju_vdp_main.c"
                             "hal/sht3x.c"
+                            "hal/mlx90614.c"
+                            "hal/amg8833.c"
                             "domain/vpd.c"
+                            "domain/thermal.c"
                             "telemetry/telemetry_dispatch.c"
+                            "telemetry/telemetry_fields.c"
                             "telemetry/thingspeak/telemetry_thingspeak.c"
                             "telemetry/mqtt/telemetry_mqtt.c"
                        INCLUDE_DIRS "."
