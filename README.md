@@ -414,8 +414,12 @@ test/host/
     esp_err.h                 # esp_err_t e códigos de erro
     esp_log.h                 # ESP_LOGI/LOGE/LOGW → printf
     esp_check.h               # ESP_RETURN_ON_FALSE / ESP_RETURN_ON_ERROR
+    esp_http_client.h         # tipos e assinaturas do esp_http_client (stub)
+    esp_crt_bundle.h          # esp_crt_bundle_attach (stub)
+    wifi_env.h                # valores de teste das variaveis MAJU_*_ENV
     freertos/FreeRTOS.h       # TickType_t, pdMS_TO_TICKS
     freertos/task.h           # vTaskDelay (no-op no host)
+    freertos/queue.h          # filas FreeRTOS simuladas de forma sincrona
     driver/i2c_master.h       # tipos e assinaturas I2C
     mqtt_client.h             # tipos e assinaturas do esp-mqtt (stub)
   i2c_stub.h / i2c_stub.c    ← mock do barramento I2C (rx injetável, erro configurável)
@@ -426,6 +430,7 @@ test/host/
   test_telemetry.c            ← 6 testes: dispatch, propagação de erro, troca de backend
   test_thingspeak.c           ← 9 testes: payload, resposta HTTP, erros, URL
   test_mqtt.c                 ← 20 testes: init, send, desconexão, falhas, erros de transporte/recusa, isolamento
+  test_dispatch.c             ← 8 testes: fila por backend, roteamento, não bloqueio, backend lento/falho, deinit
   test_runner.c               ← main() com todos os RUN_TEST; setUp reseta os stubs
   Makefile
 ```
@@ -439,6 +444,7 @@ test/host/
 | `telemetry`  | dispatch de `init`/`send`/`deinit` pelo ponteiro de interface, propagação de erro em `init`, troca de backend em runtime                                                                                                                                                             |
 | `thingspeak` | payload HTTP, campos field1–4, resposta com entry_id, corpo vazio, erro HTTP 4xx/5xx, falha no perform, cliente NULL, URL                                                                                                                                                            |
 | `mqtt`       | struct populada, init (ok, cliente null, start fail, register fail), send (tópico, payload JSON, contagem, sem conexão, desconexão, falha no publish), deinit idempotente, erros de transporte TCP e conexão recusada, isolamento (falha MQTT ≠ ThingSpeak; falha ThingSpeak ≠ MQTT) |
+| `dispatch`   | `init` chama cada backend, `send` roteia para todas as filas com os valores corretos, `send` não bloqueia antes do `process_pending`, backend lento não impede o outro, múltiplas leituras bufferizadas, `init` com erro não interrompe os demais, `deinit` zera o estado                  |
 
 ### Executar
 
@@ -451,8 +457,17 @@ make clean    # remove o binário
 Saída esperada:
 
 ```
-65 Tests 0 Failures 0 Ignored
+73 Tests 0 Failures 0 Ignored
 OK
+```
+
+No macOS, se `make` falhar com erro do `xcodebuild` (`Symbol not found`), o shim
+`/usr/bin/make` está apontando para um Xcode.app quebrado. Use o `make` do Command
+Line Tools diretamente ou corrija o `xcode-select`:
+
+```bash
+/Library/Developer/CommandLineTools/usr/bin/make            # alternativa imediata
+sudo xcode-select --switch /Library/Developer/CommandLineTools   # correção definitiva
 ```
 
 ---
