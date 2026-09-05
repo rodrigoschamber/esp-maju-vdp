@@ -15,3 +15,6 @@ test/host/run_tests.dSYM/
 
 # Configuracao local do Claude Code (skills, permissoes)
 .claude/
+test/host/run_tests
+test/host/run_tests
+test/host/run_tests.dSYM/Contents/Resources/DWARF/run_tests
